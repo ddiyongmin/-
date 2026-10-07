@@ -561,11 +561,52 @@ const Store={
   watch(code,cb){
     if(sb && code!=='202610'){
       try{
+        /* 실시간 연결이 한도(동시 접속 수 제한 등)로 거절되거나 끊기면,
+           그 사람만 몇 초마다 직접 확인하는 방식(폴링)으로 대신해요.
+           실시간이 정상인 사람은 폴링을 하지 않아요. 내용이 바뀐 경우에만 화면을 갱신해요. */
+        let pollTimer=null,lastSig=null,stopped=false,pollBusy=false;
+        const sigOf=async()=>{
+          const r=await Store.getRoom(code),p=await Store.getPeople(code);
+          return JSON.stringify([r,p]);
+        };
+        const pollOnce=async()=>{
+          if(stopped||pollBusy||document.hidden)return;
+          pollBusy=true;
+          try{
+            const sig=await sigOf();
+            if(stopped)return;
+            if(lastSig!==null&&sig!==lastSig)cb();
+            lastSig=sig;
+          }catch(e){}
+          finally{pollBusy=false;}
+        };
+        const startPoll=()=>{
+          if(pollTimer||stopped)return;
+          sigOf().then(s=>{ if(lastSig===null)lastSig=s; }).catch(()=>{});
+          // 6~10초 사이로 흩뿌려서, 여러 명이 같은 순간에 몰려 요청하지 않게 해요
+          const loop=()=>{
+            pollTimer=setTimeout(async()=>{ await pollOnce(); if(!stopped&&pollTimer)loop(); },6000+Math.random()*4000);
+          };
+          loop();
+        };
+        const stopPoll=()=>{ if(pollTimer){clearTimeout(pollTimer);pollTimer=null;} };
+        const onVis=()=>{ if(!document.hidden&&pollTimer)pollOnce(); }; // 탭으로 돌아오면 바로 한 번 확인
+        document.addEventListener('visibilitychange',onVis);
         const ch=sb.channel('cimo-room-'+code+'-'+Math.random().toString(36).slice(2))
           .on('postgres_changes',{event:'*',schema:'public',table:'rooms',filter:'code=eq.'+code},()=>cb())
           .on('postgres_changes',{event:'*',schema:'public',table:'participants',filter:'room_code=eq.'+code},()=>cb())
-          .subscribe();
-        return ()=>{ try{sb.removeChannel(ch);}catch(e){} };
+          .subscribe((status)=>{
+            if(stopped)return;
+            if(status==='SUBSCRIBED'){ stopPoll(); }
+            else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){ startPoll(); }
+          });
+        // 연결 응답이 아예 없는 경우도 대비: 8초 안에 SUBSCRIBED가 안 되면 폴링 시작
+        const guard=setTimeout(()=>{ if(!stopped&&ch.state!=='joined')startPoll(); },8000);
+        return ()=>{
+          stopped=true; clearTimeout(guard); stopPoll();
+          document.removeEventListener('visibilitychange',onVis);
+          try{sb.removeChannel(ch);}catch(e){}
+        };
       }catch(e){}
     }
     if(dbNS && code!=='202610'){
