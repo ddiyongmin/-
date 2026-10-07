@@ -287,6 +287,7 @@ table.timetable th,table.timetable td{border:none;}
 .wk-block.pending .wk-block-name{color:var(--wkc);}
 .wk-tag{display:block; font-size:8.5px; font-weight:800; margin-bottom:1px;}
 .mstat{display:inline-flex; align-items:center; font-size:11px; font-weight:700; border-radius:999px; padding:2px 8px; margin-left:6px; white-space:nowrap; vertical-align:1px;}
+.mstat-solo .mstat{margin-left:0;}
 .mstat.attend{background:var(--brand-bg); color:var(--brand-ink);}
 .mstat.absent{background:var(--bg-sunk); color:var(--ink-faint); text-decoration:line-through;}
 .mstat.pending{border:1.5px dashed var(--gold); color:var(--gold-ink);}
@@ -389,7 +390,7 @@ const IC={
   copy:sz=>_sv('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',sz),
   moon:sz=>_sv('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',sz),
   sun:sz=>_sv('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',sz),
-  gear:sz=>_sv('<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',sz),
+  gear:sz=>_sv('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',sz),
   link:sz=>_sv('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',sz),
   device:sz=>_sv('<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M11 18h2"/>',sz),
   flask:sz=>_sv('<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/><path d="M7.5 14h9"/>',sz),
@@ -533,11 +534,12 @@ const Store={
       try{
         const {data,error}=await sb.from('rooms').select('data').eq('code',code).maybeSingle();
         if(error)throw error;
-        return data?data.data:null;
+        const d=data?data.data:null;
+        return (d&&d.deleted)?null:d; // 삭제 표시된 방은 없는 방으로 봐요
       }catch(e){ /* 아래 기존 저장소로 대체 */ }
     }
     if(dbNS && code!=='202610'){
-      try{ const snap=await dbNS.doc('rooms/'+code).get(); return snap.exists? snap.data(): null; }
+      try{ const snap=await dbNS.doc('rooms/'+code).get(); const d=snap.exists? snap.data(): null; return (d&&d.deleted)?null:d; }
       catch(e){ /* 공유 저장 읽기 실패 → 로컬로 대체 */ }
     }
     return LS.get('cimo:room:'+code,null);
@@ -564,11 +566,11 @@ const Store={
       try{
         const {data,error}=await sb.from('participants').select('data').eq('room_code',code);
         if(error)throw error;
-        return (data||[]).map(r=>r.data);
+        return (data||[]).map(r=>r.data).filter(p=>p&&!p.deleted);
       }catch(e){}
     }
     if(dbNS && code!=='202610'){
-      try{ const qs=await dbNS.collection('rooms/'+code+'/people').get(); return qs.docs.map(d=>d.data()); }
+      try{ const qs=await dbNS.collection('rooms/'+code+'/people').get(); return qs.docs.map(d=>d.data()).filter(p=>p&&!p.deleted); }
       catch(e){}
     }
     return LS.get('cimo:people:'+code,[]);
@@ -594,6 +596,44 @@ const Store={
     if(i>-1)ps[i]=person;else ps.push(person);
     LS.set('cimo:people:'+code,ps);
     window.dispatchEvent(new Event('cimo:change:'+code));
+  },
+  /* 방을 아예 지워요(방 정보 + 참여자가 입력한 시간 전부). 지워졌는지 확인해서 true/false로 알려줘요.
+     1) 서버에서 진짜 삭제를 먼저 시도하고,
+     2) 서버 설정상 삭제가 막혀 있어서 행이 남아 있으면 → 내용을 모두 비우고 '삭제됨'으로 표시해요.
+        (삭제 표시된 방은 앱에서 없는 방으로 취급하고, 방 이름·날짜·입력한 시간은 모두 사라져요) */
+  async deleteRoom(code){
+    if(sb && code!=='202610'){
+      try{ await sb.from('rooms').delete().eq('code',code); }catch(e){}
+      try{ await sb.from('participants').delete().eq('room_code',code); }catch(e){}
+      const now=new Date().toISOString();
+      const chk=await sb.from('rooms').select('code').eq('code',code).maybeSingle();
+      if(chk.error)throw chk.error;
+      if(chk.data){ // 삭제가 막혀서 남아 있으면 내용을 비우고 삭제 표시
+        const up=await sb.from('rooms').upsert({code,data:{code,deleted:true,deletedAt:Date.now()},updated_at:now},{onConflict:'code'});
+        if(up.error)throw up.error;
+      }
+      const left=await sb.from('participants').select('person_id').eq('room_code',code);
+      if(left.error)throw left.error;
+      for(const r of (left.data||[])){ // 남아 있는 참여자 기록도 이름·시간을 비워요
+        const u=await sb.from('participants').upsert({room_code:code,person_id:r.person_id,data:{id:r.person_id,deleted:true},updated_at:now},{onConflict:'room_code,person_id'});
+        if(u.error)throw u.error;
+      }
+      if(await Store.getRoom(code))return false; // 그래도 보이면 실패
+      window.dispatchEvent(new Event('cimo:change:'+code));
+      return true;
+    }
+    if(dbNS && code!=='202610'){
+      try{
+        const qs=await dbNS.collection('rooms/'+code+'/people').get();
+        for(const d of qs.docs){ await dbNS.collection('rooms/'+code+'/people').doc(d.id).delete(); }
+      }catch(e){}
+      await dbNS.doc('rooms/'+code).delete();
+      window.dispatchEvent(new Event('cimo:change:'+code));
+      return true;
+    }
+    try{ localStorage.removeItem('cimo:room:'+code); localStorage.removeItem('cimo:people:'+code); }catch(e){}
+    window.dispatchEvent(new Event('cimo:change:'+code));
+    return true;
   },
   watch(code,cb){
     if(sb && code!=='202610'){
@@ -766,9 +806,10 @@ function computeTop3(room,people){
     if(top.some(t=>t.date===w.date&&w.start<t.end&&t.start<w.end))continue; // 시간이 겹치는 구간은 한 번만 추천
     top.push(w);
   }
-  /* 등급·인원수가 같아도 공동 순위로 묶지 않고, 이미 정렬된 순서(날짜 빠른 순 → 시간 빠른 순)
-     그대로 1위부터 차례로 번호를 매겨요. */
-  elig.forEach((w,i)=>{ w.rank=i+1; });
+  /* 등급·인원수가 같아도 공동 순위로 묶지 않고, 이미 정렬된 순서(날짜 빠른 순 → 시간 빠른 순)대로 번호를 매겨요.
+     번호는 '실제로 추천에 보이는 순위(top)'끼리만 1, 2, 3으로 이어서 매겨요.
+     (시간이 겹쳐서 건너뛴 후보까지 세면 1·3·5처럼 번호가 뜀) */
+  top.forEach((w,i)=>{ w.rank=i+1; });
   /* 참고 카드: 순위 규칙(필참자 등)엔 못 미치지만, 그 어떤 추천보다 더 많이 모이는 시간.
      방장이 "그래도 이 시간이 낫지 않을까" 판단할 근거만 참고로 보여줘요. */
   const byCount=out.slice().sort((a,b)=> b.totalAvail-a.totalAvail || b.req-a.req || cmpDate(a.date,b.date) || a.start-b.start);
@@ -894,16 +935,26 @@ async function openRoom(code,tab){
       App.me={name:gp.name,title:t};
       setIdentity(code,gp.name,t);
     } else { App.me=getIdentity(code); }
-    App.tab=tab||(room.confirmed||code==='202610'?'results':'input');
+    /* 이미 이 방에 투표한 사람이 들어오면 입력 화면이 아니라 1·2·3순위(추천 결과)부터 보여줘요.
+       시간을 고치고 싶으면 결과 화면의 '내 시간 수정하기'를 누르면 돼요. */
+    const alreadyVoted = !!App.me && people.some(p=>p.name===App.me.name&&rankOf(p)===rankOf(App.me.title||''));
+    App.tab=tab||(room.confirmed||code==='202610'||alreadyVoted?'results':'input');
     App.draft={pendingCells:null,name:'',title:'',rank:'',dept:null,deptCustom:false,deptText:''};
     App._personSel=null;
-    pushRecent(code,room.name);
+    if(code!=='202610')pushRecent(code,room.name); // 예시 방은 내 모임 목록에 남기지 않아요
     App.busy=[];
     App.unwatch=Store.watch(code,async()=>{
       if(App.code!==code)return;
       try{
-        const r=await Store.getRoom(code),p=await Store.getPeople(code);
+        let r=await Store.getRoom(code);const p=await Store.getPeople(code);
         if(App.code!==code)return;
+        if(!r){
+          /* 방이 없어졌어요. 일시적인 연결 오류일 수 있어서 잠깐 뒤 한 번 더 확인하고, 그래도 없으면 삭제된 것으로 봐요. */
+          await new Promise(res=>setTimeout(res,1500));
+          if(App.code!==code)return;
+          r=await Store.getRoom(code);
+          if(!r){ toast('방장이 이 방을 삭제했어요'); await goHomeScreen(); return; }
+        }
         App.room=r;App.people=p;
         /* 시간 입력 중에는 다른 사람의 변경으로 표를 다시 그리지 않아요(스크롤·선택이 튀지 않게).
            단, 확정·마감으로 잠기면 바로 보여줘요. */
@@ -1007,6 +1058,7 @@ async function loadHomeMeetings(){
   favs.forEach(r=>map.set(r.code,r.name));
   recents.forEach(r=>{ if(!map.has(r.code))map.set(r.code,r.name); });
   const items=[];
+  map.delete('202610'); // 이미 예시 방이 목록에 기록돼 있던 기기에서도 보이지 않게 해요
   for(const [code,name] of map.entries()){
     const room=await Store.getRoom(code);
     if(!room)continue;
@@ -1018,9 +1070,13 @@ async function loadHomeMeetings(){
       status = isLocked(room) ? 'past':'ongoing';
       sortDate = (room.dates&&room.dates.length)? room.dates.slice().sort()[0]: null;
     }
-    let myStatus=null;
+    let myStatus=null,voted=false;
     if(room.confirmed){ try{ myStatus=myConfirmedStatus(code,room,await Store.getPeople(code)); }catch(e){ myStatus='pending'; } }
-    items.push({code,name:room.name||name,fav:isFav(code),room,status,sortDate,myStatus});
+    else{
+      // 아직 확정 전인 방: 내가 이미 가능한 시간을 저장했는지(투표 완료) 확인해요
+      try{ const ids=myIdsFor(code); voted=ids.length>0 && (await Store.getPeople(code)).some(p=>isMeIn(ids,p)); }catch(e){ voted=false; }
+    }
+    items.push({code,name:room.name||name,fav:isFav(code),room,status,sortDate,myStatus,voted});
   }
   items.sort((a,b)=>cmpDate(a.sortDate||'9999-12-31',b.sortDate||'9999-12-31') || ((a.room.confirmed?a.room.confirmed.start:9999)-(b.room.confirmed?b.room.confirmed.start:9999)));
   App.homeMeetings={
@@ -1077,6 +1133,27 @@ function meetingRow(item){
     <button class="iconbtn" style="width:32px;height:32px;font-size:18px;color:var(--ink-faint);" data-act="leaveAsk" data-code="${code}" data-name="${esc(name)}" aria-label="더보기">⋯</button>
   </div>`;
 }
+/* 두 칸으로 나눠 보여줄 때 쓰는 좁은 모임 행: 이름 / 날짜 / 시간·참석 상태를 세로로 쌓아요 */
+function meetingRowCompact(item,act){
+  act=act||'enter';
+  const {code,name,fav,room,sortDate}=item;
+  const c=room.confirmed;
+  // 확정된 모임: 날짜·시간 + 참석 상태 / 조율 중인 모임: 마감 + 투표 여부
+  const info = c
+    ? `<div class="muted" style="font-size:11.5px;margin-top:1px;">${dateLabel(sortDate)}</div>
+      <div class="muted" style="font-size:11.5px;margin-top:1px;">${minToHHMM(c.start)}~${minToHHMM(c.end)}</div>
+      <div class="mstat-solo" style="margin-top:3px;">${mstatBadge(item.myStatus)}</div>`
+    : `<div class="muted" style="font-size:11.5px;margin-top:1px;">${(room.deadline&&room.deadline.mode!=='none'&&room.deadline.value)?('마감 '+dateLabel(room.deadline.value.slice(0,10))):'마감 없음'}</div>
+      <div class="mstat-solo" style="margin-top:3px;">${item.voted?'<span class="mstat attend">투표 완료</span>':'<span class="mstat pending">미투표</span>'}</div>`;
+  return `<div class="roomitem" data-act="${act}" data-code="${code}" style="align-items:flex-start;padding:8px 2px;gap:4px;">
+    <button class="star ${fav?'on':''}" style="font-size:16px;padding:0 4px 0 0;flex-shrink:0;line-height:1.3;" data-act="favRow" data-code="${code}" data-name="${esc(name)}">${fav?'★':'☆'}</button>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${item.myStatus==='absent'?'color:var(--ink-faint);':''}">${esc(name)}</div>
+      ${info}
+    </div>
+    <button class="iconbtn" style="width:26px;height:26px;font-size:16px;color:var(--ink-faint);flex-shrink:0;" data-act="leaveAsk" data-code="${code}" data-name="${esc(name)}" aria-label="더보기">⋯</button>
+  </div>`;
+}
 function vHome(){
   let body;
   if(App.mainTab==='calendar')body=vCalendarTab();
@@ -1107,19 +1184,68 @@ function vMeetingsTab(){
       <div class="empty-small" style="padding:30px 0;">불러오는 중…</div>
     </div>`;
   }
-  const {upcoming,ongoing,past}=hm;
+  const {upcoming,ongoing}=hm;
+  /* 확정된 모임은 가장 빠른 하나만 보여주지 않고, 다가오는 확정 일정을 전부 날짜순으로 보여줘요. */
+  const byDateTime=(a,b)=>cmpDate(a.sortDate,b.sortDate)||((a.room.confirmed.start||0)-(b.room.confirmed.start||0));
+  // 이미 지난 날짜는 여기 보여주지 않아요(오늘 포함 앞으로의 모임만). 지난 모임은 아래 '지난 모임'에 그대로 있어요.
+  const upcomingList=upcoming.filter(i=>i.room.confirmed&&i.sortDate).sort(byDateTime);
+  const past=hm.past;
+  // 다가오는 일정: 내가 참석하는 모임 / 불참하는 모임
+  const attendList=upcomingList.filter(i=>i.myStatus==='attend');
+  const absentList=upcomingList.filter(i=>i.myStatus==='absent');
+  /* 미응답(확정됐는데 내가 아직 응답하지 않은 모임)은 '진행 중인 조율'로 옮겨요.
+     진행 중인 조율은 '미확정'(내가 투표 끝냄, 아직 확정 전) | '미투표'(내가 아직 투표 안 함)로 나눠요. */
+  const pendingConfirmed=upcomingList.filter(i=>i.myStatus!=='attend'&&i.myStatus!=='absent');
+  const unconfirmedList=ongoing.filter(i=>i.voted);
+  const unvotedList=[...pendingConfirmed,...ongoing.filter(i=>!i.voted)];
+  /* 즐겨찾기는 '다가오는 일정'에서 빼는 게 아니라 따로 한 번 더 모아서 보여줘요.
+     (확정 예정 → 조율 중 → 지난 모임 순) 같은 모임이 두 곳에 같이 보이는 게 맞아요. */
+  const favList=[
+    ...upcomingList.filter(i=>i.fav),
+    ...ongoing.filter(i=>i.fav),
+    ...past.filter(i=>i.fav)
+  ];
+  const rows=list=>`<div style="display:flex;flex-direction:column;gap:2px;">${list.map(i=>meetingRow(i)).join('')}</div>`;
   return `
   <div class="scr">
     <div class="row between" style="padding:2px 2px 0;align-items:center;">
       <h1 style="margin:0;font-size:22px;font-weight:900;">내 모임</h1>
       <button class="btn btn-primary btn-sm" style="width:auto;" data-act="goCreate">+ 만들기</button>
     </div>
-    ${(()=>{const nx=upcoming.find(i=>i.myStatus!=='absent'&&visibleConfirmed(i));return nx?heroCard(nx):'';})()}
+    ${(!profileValid(getMyProfile()) && !App._noProfileBanner)? `<div class="banner-gold" style="display:flex;flex-direction:column;gap:10px;">
+      <div style="font-weight:700;">내 정보를 입력하세요</div>
+      <div style="font-size:12.5px;line-height:1.5;">이름과 직급을 한 번만 등록하면 어느 방에 들어가도 다시 입력하지 않아도 돼요.<br>지금 입력하시겠어요?</div>
+      <div class="row" style="gap:8px;">
+        <button class="btn btn-primary btn-sm" style="flex:1;" data-act="mainTab" data-v="profile">예</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1;" data-act="profileBannerNo">아니오</button>
+      </div>
+    </div>` : ''}
+    <div class="sectitle" style="padding:6px 2px 0;">다가오는 일정</div>
+    ${(attendList.length||absentList.length)? `<div style="display:grid;grid-template-columns:1fr 1fr;align-items:start;">
+      <div style="min-width:0;padding-right:8px;">
+        <div class="muted" style="font-size:12px;font-weight:700;padding:6px 4px 4px;">참석</div>
+        ${attendList.length? attendList.map(i=>meetingRowCompact(i)).join('') : '<div class="empty-small" style="padding:18px 0;">없어요</div>'}
+      </div>
+      <div style="min-width:0;padding-left:8px;border-left:1px solid var(--line-strong);">
+        <div class="muted" style="font-size:12px;font-weight:700;padding:6px 4px 4px;">불참</div>
+        ${absentList.length? absentList.map(i=>meetingRowCompact(i)).join('') : '<div class="empty-small" style="padding:18px 0;">없어요</div>'}
+      </div>
+    </div>` : `<div class="empty-small" style="padding:18px 0;">${upcomingList.length?'참석하거나 불참한 확정 모임이 없어요.':'예정된 확정 모임이 없어요.'}</div>`}
+    <hr class="sep">
+    <div class="sectitle" style="padding:0 2px;">즐겨찾기</div>
+    ${favList.length? rows(favList) : '<div class="empty-small" style="padding:18px 0;">모임 옆의 ☆를 누르면 여기에 모여요.</div>'}
     <hr class="sep">
     <div class="sectitle" style="padding:0 2px;">진행 중인 조율</div>
-    <div style="display:flex;flex-direction:column;gap:2px;">
-      ${ongoing.length? ongoing.map(i=>meetingRow(i)).join(''): '<div class="empty-small" style="padding:26px 0;">진행 중인 조율이 없어요.</div>'}
-    </div>
+    ${(unconfirmedList.length||unvotedList.length)? `<div style="display:grid;grid-template-columns:1fr 1fr;align-items:start;">
+      <div style="min-width:0;padding-right:8px;">
+        <div class="muted" style="font-size:12px;font-weight:700;padding:6px 4px 4px;">미확정</div>
+        ${unconfirmedList.length? unconfirmedList.map(i=>meetingRowCompact(i,'enter')).join('') : '<div class="empty-small" style="padding:18px 0;">없어요</div>'}
+      </div>
+      <div style="min-width:0;padding-left:8px;border-left:1px solid var(--line-strong);">
+        <div class="muted" style="font-size:12px;font-weight:700;padding:6px 4px 4px;">미투표</div>
+        ${unvotedList.length? unvotedList.map(i=>meetingRowCompact(i,i.room.confirmed?'enter':'enterVote')).join('') : '<div class="empty-small" style="padding:18px 0;">없어요</div>'}
+      </div>
+    </div>` : '<div class="empty-small" style="padding:26px 0;">진행 중인 조율이 없어요.</div>'}
     <hr class="sep">
     <button class="row between btn-text" style="width:100%;padding:10px 2px;" data-act="togglePast">
       <span>지난 모임 ${past.length}</span><span>${App.showPast?'︿':'﹀'}</span>
@@ -1329,11 +1455,6 @@ function vProfileTab(){
       <span>테마</span>
       <button class="btn btn-ghost btn-sm" data-act="theme">${getTheme()==='dark'?'라이트 모드로':'다크 모드로'}</button>
     </div>
-    <div class="card">
-      <div class="sectitle">저장 상태</div>
-      <div class="muted" style="margin-top:6px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:${saveMode==='shared'?'var(--ok)':'var(--ink-faint)'};"></span>${saveMode==='shared'?'공유 저장 모드 — 링크를 받은 누구나 같은 데이터를 봐요':'미리보기 모드 — 지금은 이 기기에만 저장돼요'}</div>
-    </div>
-    <div class="muted" style="text-align:center;padding:30px 0 0;">프로필, 알림 등 나머지 구성은 다음 작업에서 채울게요.</div>
   </div>`;
 }
 
@@ -1474,7 +1595,7 @@ function timeOptions(val,isEnd){
   return out;
 }
 function selDatesLabel(){
-  if(!C.dates.length)return '선택된 날짜가 없어요';
+  if(!C.dates.length)return '날짜를 하나 선택해주세요';
   return C.dates.slice().sort().map(d=>dateLabel(d)).join(', ');
 }
 function renderCalendar(){
@@ -1516,7 +1637,8 @@ const createActions={
   calPrev:()=>{C.calMonth--;if(C.calMonth<0){C.calMonth=11;C.calYear--;}refreshCreateSection('#calBox',renderCalendar());},
   calNext:()=>{C.calMonth++;if(C.calMonth>11){C.calMonth=0;C.calYear++;}refreshCreateSection('#calBox',renderCalendar());},
   toggleDate:(v)=>{
-    if(C.dates.includes(v))C.dates=C.dates.filter(x=>x!==v);else C.dates.push(v);
+    // 날짜는 하나만 고를 수 있어요: 다른 날짜를 누르면 그 날짜로 바뀌고, 같은 날짜를 다시 누르면 선택이 풀려요
+    C.dates = (C.dates.length===1 && C.dates[0]===v) ? [] : [v];
     refreshCreateSection('#calBox',renderCalendar());
     $('#selDatesLbl').textContent=selDatesLabel();
   },
@@ -1545,7 +1667,7 @@ const createActions={
     const gp=getMyProfile();
     if(!profileValid(gp)){errEl.textContent='담당자 정보가 필요해요. 먼저 "내 정보"에서 이름·직급을 등록해주세요.';return;}
     if(!C.name.trim()){errEl.textContent='모임 이름을 입력해주세요.';return;}
-    if(!C.dates.length){errEl.textContent='날짜를 1개 이상 선택해주세요.';return;}
+    if(!C.dates.length){errEl.textContent='날짜를 선택해주세요.';return;}
     if(C.timeEnd<=C.timeStart){errEl.textContent='시간대의 끝 시각이 시작 시각보다 늦어야 해요.';return;}
     const durationMin=C.durMode==='1h'?60:C.durMode==='2h'?120:C.durMode==='3h'?180:(C.durCustomH*60+C.durCustomM);
     if(durationMin<=0){errEl.textContent='소요 시간을 확인해주세요.';return;}
@@ -1606,7 +1728,6 @@ function vRoom(){
   </div>
   <div id="roomBody">${vRoomBody()}</div>
   <div class="tabs">
-    ${App.room.confirmed?'':`<button class="tab ${App.tab==='input'?'on':''}" data-act="tab" data-v="input">${icoTab(IC.pen)}시간 입력</button>`}
     <button class="tab ${App.tab==='results'?'on':''}" data-act="tab" data-v="results">${icoTab(IC.trophy)}추천 결과</button>
     <button class="tab ${App.tab==='status'?'on':''}" data-act="tab" data-v="status">${icoTab(IC.users)}참여 현황</button>
   </div>`;
@@ -1752,7 +1873,7 @@ function renderTop3Section(room,people){
   }
   const cards=top.map((w,i)=>{
     const golden=w.totalAvail===room.totalCount && w.req===room.required.length;
-    const action = changeMode ? `data-act="selectRank" data-i="${i}"` : `data-act="hlWindow" data-idxs="${w.idxs.join(',')}"`;
+    const action = changeMode ? `data-act="selectRank" data-i="${i}"` : `data-act="hlWindow" data-idxs="${w.idxs.join(',')}" data-i="${i}"`;
     return `<div class="rankcard r${Math.min(w.rank,3)}" ${action} style="cursor:pointer;">
       <div class="range"><span class="rbadge">${w.rank}순위</span><span>${dateLabel(w.date)} ${minToHHMM(w.start)}~${minToHHMM(w.end)}</span>${golden?`<span class="ico" style="color:var(--gold-ink);" title="전원 가능">${IC.trophy(16)}</span>`:''}</div>
       <div class="cond">필참자 ${w.req}/${room.required.length} · 전체 ${w.totalAvail}/${room.totalCount}</div>
@@ -1768,14 +1889,19 @@ function renderTop3Section(room,people){
   /* 참고 카드: 추천 순위가 있어도, 그보다 더 많이 모이는 시간이 있으면 함께 보여줘요(기획안 B).
      필참자 조건 때문에 빠진 시간이라, 방장이 필참자에게 조정 가능 여부를 물어볼 근거가 돼요. */
   const refBlock = (refs&&refs.length) ? `<div class="sectitle" style="padding:0 2px;margin-top:6px;">참고 · 추천보다 더 많이 모이는 시간</div>${renderRefList(room,refs,changeMode)}` : '';
-  const html=`${topBtns}<div style="display:flex;flex-direction:column;gap:10px;">${cards}</div>${changeBar}<div id="rankPanel" style="margin-top:2px;"></div>${refBlock}`;
+  // 아직 확정 전이면 방장에게만 '일정 확정하기'를 보여줘요 (모두 투표하지 않았어도 확정 가능)
+  const hostConfirmBar = (!room.confirmed && isHostOf(room)) ? `<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+    <div class="muted" style="font-size:12.5px;">확정할 순위를 눌러 선택하세요. 모두 투표하지 않았어도 확정할 수 있어요.</div>
+    <button class="btn btn-primary btn-sm" id="rankConfirmBtn" style="width:100%;" data-act="confirmSelectedRank" disabled>순위를 선택해주세요</button>
+  </div>` : '';
+  const html=`${topBtns}<div style="display:flex;flex-direction:column;gap:10px;">${cards}</div>${changeBar}${hostConfirmBar}<div id="rankPanel" style="margin-top:2px;"></div>${refBlock}`;
   return {html,top,refs,ok:true};
 }
 function renderRefList(room,refs,changeMode){
   if(!refs||!refs.length)return '';
   App._refSel=null; // 렌더할 때마다 참고 순위 선택 초기화
   // 확정 전이거나, 확정 후 변경 모드일 때만 고를 수 있어요
-  const selectable=!room.confirmed || !!changeMode;
+  const selectable=(!room.confirmed && isHostOf(room)) || !!changeMode;
   const cards=refs.map((w,idx)=>{
     const attrs=selectable?`data-act="selectRef" data-i="${idx}" style="padding:12px 14px;border-style:dashed;cursor:pointer;"`:`style="padding:12px 14px;border-style:dashed;"`;
     return `<div class="card refcard" ${attrs}>
@@ -1787,10 +1913,21 @@ function renderRefList(room,refs,changeMode){
   const btn=selectable?`<button class="btn btn-primary btn-sm" id="refConfirmBtn" style="width:100%;margin-top:4px;" data-act="confirmWithRef" disabled>참고 순위를 선택해주세요</button>${changeMode?`<button class="btn-text" data-act="cancelChange">취소</button>`:''}`:'';
   return `<div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">${cards}${btn}</div>`;
 }
+function iVotedIn(people){
+  return !!App.me && (people||[]).some(p=>p.name===App.me.name&&rankOf(p)===rankOf(App.me.title||''));
+}
 function vResults(){
   const room=App.room,people=App.people;
   const sec=renderTop3Section(room,people);
-  return sec.html;
+  /* '시간 입력' 탭은 없앴어요. 입력이 열려 있으면 순위 화면 위의 버튼으로 시간 입력 화면에 들어가요.
+     이미 투표했으면 '시간 수정하기', 아직이면 '시간 입력하기'예요. */
+  const voted=iVotedIn(people);
+  const editBtn=(!isLocked(room))
+    ? `<div class="row between" style="padding:0 2px 8px;align-items:center;">
+        <span class="muted" style="font-size:12.5px;">${voted?'내가 입력한 시간이 반영된 순위예요':'아직 내 시간을 입력하지 않았어요'}</span>
+        <button class="btn btn-ghost btn-sm" style="width:auto;" data-act="editMyTimes">${voted?'시간 수정하기':'시간 입력하기'}</button>
+      </div>` : '';
+  return editBtn+sec.html;
 }
 /* 날짜마다 한 줄짜리 가로 타임라인 바 하나로 보여줘요 — 시간대별로 칸이 잔뜩 쌓인
    표보다, 하루에 한 줄씩이 한눈에 비교하기 훨씬 쉬워서요. */
@@ -1812,18 +1949,6 @@ function vStatus(){
     <div class="row between"><b>${total}명 중 ${done}명 완료</b><span class="muted">${pct}%</span></div>
     <div class="progress ${full?'full':''}" style="margin-top:8px;"><b style="width:${pct}%"></b></div>
   </div>
-  ${(()=>{
-    if(room.confirmed)return '';
-    const isManager = App.me && room.manager && App.me.name===room.manager.name && App.me.title===room.manager.title;
-    if(!full && !isManager)return '';
-    const msg = full
-      ? '모든 인원이 입력을 완료했어요. 이제 일정을 확정할 수 있어요.'
-      : '담당자님, 아직 전원이 입력하진 않았지만 지금 바로 일정을 확정할 수도 있어요.';
-    return `<div class="banner-gold" style="display:flex;flex-direction:column;gap:10px;">
-      <div>${msg}</div>
-      <button class="btn btn-primary btn-sm" style="width:auto;align-self:flex-start;" data-act="sheetConfirm">일정 확정하기</button>
-    </div>`;
-  })()}
   <div class="card">
     <div class="sectitle">완료</div>
     <div class="muted" style="font-size:12px;margin-top:4px;">이름을 누르면 그 사람이 고른 시간을 볼 수 있어요.</div>
@@ -1939,6 +2064,10 @@ const globalActions={
     if(!ok)errEl.innerHTML='<div class="err">존재하지 않는 방 코드예요.</div>';
   },
   enter:async(el,v,code)=>{await openRoom(code||el.getAttribute('data-code'));},
+  // '내 정보를 입력하세요' 배너에서 아니오: 이번에 앱을 켜 둔 동안만 배너를 숨겨요(다음에 앱을 열면 다시 나와요)
+  profileBannerNo:()=>{App._noProfileBanner=true;render();},
+  // 아직 투표하지 않은 모임은 결과 화면이 아니라 가능한 시간을 표시하고 저장하는 입력 화면으로 바로 들어가요
+  enterVote:async(el,v,code)=>{await openRoom(code||el.getAttribute('data-code'),'input');},
   rmFav:(el,v,code)=>{removeFav(code);},
   rmRecent:(el,v,code)=>{removeRecent(code);},
   fav:()=>{toggleFav(App.code,App.room.name);render();},
@@ -1956,6 +2085,8 @@ const globalActions={
     copyText(`⏰ ${r.name}\n아직 가능한 시간을 입력하지 않으셨다면 체크 부탁드려요 🙏\n${dlLine}${link}`);
   },
   personSlots:(el)=>{const id=el.getAttribute('data-pid');App._personSel=(App._personSel===id?null:id);renderRoomBody();},
+  // 이미 투표한 사람이 시간을 고치려고 입력 화면으로 들어가요 (저장했던 시간이 그대로 채워져요)
+  editMyTimes:()=>{App.tab='input';App.draft.pendingCells=null;render();},
   tab:async(el,v)=>{App.tab=v;App.draft.pendingCells=null;render();await refreshRoomData();if(App.tab===v&&App.screen==='room')renderRoomBody();},
   fillId:(el)=>{
     const t=el.getAttribute('data-title'),parts=splitTitle(t);
@@ -2008,9 +2139,13 @@ const globalActions={
       return;
     }
     await refreshRoomData();
+    const autoDone=await autoConfirmIfComplete();
     App.tab='results';App.draft.pendingCells=null;
     render();
-    toast('저장했어요. 추천 결과에 반영됐어요');
+    if(autoDone){
+      if(!getConfetti(App.code).confirmed){setConfettiFlag(App.code,'confirmed');fireConfetti();}
+      toast('모두 투표를 마쳐서 1순위 시간으로 일정이 확정됐어요');
+    }else toast('저장했어요. 추천 결과에 반영됐어요');
   },
   hlWindow:(el)=>{
     const idxs=el.getAttribute('data-idxs').split(',').map(Number);
@@ -2021,6 +2156,14 @@ const globalActions={
     App._refSel=null;
     const rb=$('#refConfirmBtn'); if(rb){rb.disabled=true;rb.textContent='참고 순위를 선택해주세요';}
     el.classList.add('selected');
+    const ri=el.getAttribute('data-i');
+    App._rankSel=(ri!=null)?+ri:null;
+    const cbtn=$('#rankConfirmBtn');
+    if(cbtn&&ri!=null){
+      const w=computeTop3(App.room,App.people).top[+ri];
+      cbtn.disabled=!w;
+      cbtn.textContent=w?`${w.rank}순위로 일정 확정하기`:'순위를 선택해주세요';
+    }
     const bd=windowBreakdown(App.room,App.people,idxs);
     panel.innerHTML=`<div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px;">
       <div class="statrow">
@@ -2093,6 +2236,16 @@ const globalActions={
       btn.textContent=w?`참고 ${w.refRank}순위로 일정 ${vb}하기`:`일정 ${vb}하기`;
     }
   },
+  // 방장이 선택한 1·2·3순위로 일정 확정 (비밀번호 확인)
+  confirmSelectedRank:async()=>{
+    if(App._rankSel==null){toast('확정할 순위를 먼저 선택해주세요');return;}
+    const idx=App._rankSel;
+    askPassword(async()=>{
+      const {top}=computeTop3(App.room,App.people);
+      const w=top[idx];
+      if(w)await doConfirmInternal(w);
+    });
+  },
   confirmWithRef:async()=>{
     if(App._refSel==null){toast('참고 순위를 먼저 선택해주세요');return;}
     const idx=App._refSel;
@@ -2108,20 +2261,45 @@ const globalActions={
   sheetDeleteSchedule:()=>{
     askPassword(()=>{
       openSheet(`<h3>일정을 삭제하시겠어요?</h3>
-        <div class="muted" style="line-height:1.6;">확정된 일정이 취소되며, 다시 일정을 확정할 수 있게 돼요.</div>
+        <div class="muted" style="line-height:1.6;"><b style="color:var(--ink);">확정된 일정과 이 방이 완전히 삭제돼요.</b><br>참여자들이 입력한 시간도 모두 사라지고, 되돌릴 수 없어요.</div>
         <div class="card" style="margin-top:12px;padding:12px 14px;">
-          <div style="font-weight:700;font-size:15px;">${dateLabel(App.room.confirmed.date)} ${minToHHMM(App.room.confirmed.start)}~${minToHHMM(App.room.confirmed.end)}</div>
+          <div style="font-weight:700;font-size:15px;">${esc(App.room.name||'')}</div>
+          <div class="muted" style="margin-top:3px;">${dateLabel(App.room.confirmed.date)} ${minToHHMM(App.room.confirmed.start)}~${minToHHMM(App.room.confirmed.end)}</div>
         </div>
-        <button class="btn btn-danger" data-act="doDeleteSchedule">확인: 삭제하기</button>
-        <button class="btn-text" data-act="closeSheet">취소</button>`);
+        <div class="row" style="gap:8px;margin-top:6px;">
+          <button class="btn btn-danger" style="flex:1;" data-act="doDeleteSchedule">예, 삭제</button>
+          <button class="btn btn-ghost" style="flex:1;" data-act="closeSheet">아니오</button>
+        </div>`);
     });
   },
+  /* 일정 삭제 = 방 자체를 삭제해요 (확정만 취소하고 '미확정'으로 돌아가지 않아요) */
   doDeleteSchedule:async()=>{
-    App.room.confirmed=null;
-    App._changeMode=null;
-    await Store.setRoom(App.code,App.room);
-    closeSheet();render();
-    toast('일정을 삭제했어요');
+    if(App._deletingRoom)return;
+    App._deletingRoom=true;
+    const code=App.code;
+    try{
+      if(App.unwatch){App.unwatch();App.unwatch=null;} // 삭제 중에 화면이 다시 그려지지 않게 먼저 끊어요
+      const ok=await Store.deleteRoom(code);
+      if(!ok){
+        closeSheet();
+        // 지우지 못했으니 방은 그대로예요. 다시 실시간 갱신을 이어 붙이기 위해 방을 다시 열어요.
+        await openRoom(code,'results');
+        openSheet(`<h3>삭제하지 못했어요</h3>
+          <div class="muted" style="line-height:1.6;">서버와 연결이 불안정해서 <b style="color:var(--ink);">방이 그대로 남아 있어요.</b><br>잠시 후 다시 시도해 주세요.</div>
+          <button class="btn btn-ghost" data-act="closeSheet">닫기</button>`);
+        return;
+      }
+      leaveRoomList(code);
+      App._changeMode=null;App.room=null;App.people=[];
+      closeSheet();
+      await goHomeScreen();
+      toast('일정과 방을 완전히 삭제했어요');
+    }catch(err){
+      console.error('방 삭제 중 오류',err);
+      closeSheet();
+      toast('삭제하지 못했어요. 다시 시도해주세요.');
+      try{ await openRoom(code,'results'); }catch(e){}
+    }finally{ App._deletingRoom=false; }
   },
   doConfirmManual:async()=>{
     const room=App.room;
@@ -2145,6 +2323,33 @@ const globalActions={
   }
 };
 /* 참고 순위나 직접 선택으로 일정을 확정하는 내부 함수 */
+/* 이 기기의 '나'가 이 방의 방장(담당자)인지 확인해요: 방에서 고른 이름 또는 내 정보의 이름·직급이 담당자와 같으면 방장이에요 */
+function isHostOf(room){
+  try{
+    if(!room||!room.manager)return false;
+    if(App.me && App.me.name===room.manager.name && rankOf(App.me.title||'')===rankOf(room.manager.title||''))return true;
+    return isMeIn(myIdsFor(App.code),room.manager);
+  }catch(e){ return false; }
+}
+/* 마지막 사람까지 투표를 마치면(입력 인원 = 참여 가능 인원) 자동으로 1순위 시간으로 일정을 확정해요.
+   조건에 맞는 1순위가 없으면 확정하지 않고 방장이 직접 정하게 둬요. 확정했으면 true를 돌려줘요. */
+async function autoConfirmIfComplete(){
+  try{
+    const code=App.code;
+    const r=await Store.getRoom(code);
+    if(!r||r.confirmed)return false;
+    const people=await Store.getPeople(code);
+    if(people.length<r.totalCount)return false;
+    const {top}=computeTop3(r,people);
+    if(!top.length)return false;
+    const w=top[0];
+    const attendees=attendeesForIdxs(people,w.idxs).map(p=>({name:p.name,title:p.title}));
+    r.confirmed={date:w.date,start:w.start,end:w.end,attendees};
+    await Store.setRoom(code,r);
+    App.room=r;App.people=people;
+    return true;
+  }catch(e){ console.error('자동 확정 중 오류',e); return false; }
+}
 async function doConfirmInternal(w){
   const wasConfirmed=!!App.room.confirmed;
   const idxs=w.idxs;
