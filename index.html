@@ -1454,11 +1454,21 @@ async function planProfileDelete(){
     const ids=myIdsFor(code);
     const host=!!room.manager && isMeIn(ids,room.manager);
     if(host){ plan.hosted.push({code,name:room.name||code}); continue; }
-    let mine=[];
-    try{ mine=(await Store.getPeople(code)).filter(x=>isMeIn(ids,x)); }catch(e){}
-    plan.joined.push({code,name:room.name||code,personIds:mine.map(x=>x.id)});
+    let mine=[],allPeople=[];
+    try{ allPeople=await Store.getPeople(code); mine=allPeople.filter(x=>isMeIn(ids,x)); }catch(e){}
+    plan.joined.push({code,name:room.name||code,personIds:mine.map(x=>x.id),room,ids,people:allPeople});
   }
   return plan;
+}
+/* 내 입력을 지운 뒤, 확정된 일정의 '참여' 명단에서도 내 이름을 빼요. (확정 자체는 그대로 둬요) */
+async function removeMeFromConfirmed(code,room,ids){
+  if(!room||!room.confirmed||!room.confirmed.attendees)return false;
+  const c=room.confirmed;
+  const left=c.attendees.filter(a=>!isMeIn(ids,a));
+  if(left.length===c.attendees.length)return false;
+  room.confirmed=Object.assign({},c,{attendees:left});
+  await Store.setRoom(code,room);
+  return true;
 }
 function wipeLocalForRoom(code){
   leaveRoomList(code);
@@ -2063,7 +2073,7 @@ const globalActions={
     openSheet(`<h3>목록에서 나갈까요?</h3>
       <div class="muted" style="line-height:1.7;"><b style="color:var(--ink);">${esc(name)}</b>이(가) 내 모임 목록에서 사라지고, <b style="color:var(--ink);">내가 입력한 가능 시간도 함께 삭제돼요.</b><br>
       · 참여 현황과 추천 순위가 내가 빠진 기준으로 다시 계산돼요<br>
-      · 이미 확정된 일정이라도 내가 빠져서 확정 조건이 깨지면 "진행 중인 조율"로 돌아가요<br>
+      · 이미 확정된 일정은 그대로 유지되고, 확정 명단에서만 내 이름이 빠져요<br>
       · 내가 방장이면 방은 그대로 남고 내 목록에서만 사라져요</div>
       <button class="btn btn-danger" data-act="doLeave" data-code="${esc(code)}">나가기</button>
       <button class="btn-text" data-act="closeSheet">취소</button>`);
@@ -2082,21 +2092,7 @@ const globalActions={
           const mine=people.filter(x=>isMeIn(ids,x));
           for(const m of mine)await Store.removePerson(code,m.id);
           if(mine.length)msg='나가면서 내가 입력한 시간도 삭제했어요';
-          if(room.confirmed){
-            const rest=people.filter(x=>!isMeIn(ids,x));
-            const c=room.confirmed;
-            const w=computeTop3(room,rest).all.find(x=>x.date===c.date&&x.start===c.start);
-            let broken=!rest.length||!w||!w.eligible;
-            if(!broken && c.attendees){
-              // 내가 참석자 명단에 있었다면 명단에서만 빼요
-              const left=c.attendees.filter(a=>!isMeIn(ids,a));
-              if(left.length!==c.attendees.length){ room.confirmed=Object.assign({},c,{attendees:left}); await Store.setRoom(code,room); }
-            }
-            if(broken){
-              room.confirmed=null; await Store.setRoom(code,room);
-              msg='내가 빠져서 확정 조건이 깨졌어요. 이 일정은 진행 중인 조율로 돌아갔어요';
-            }
-          }
+          await removeMeFromConfirmed(code,room,ids);
         }
       }
     }catch(err){
@@ -2181,7 +2177,7 @@ const globalActions={
         try{ if(await Store.deleteRoom(r.code))wipeLocalForRoom(r.code); else failed++; }catch(e){ failed++; }
       }
       for(const r of plan.joined){
-        try{ for(const id of r.personIds)await Store.removePerson(r.code,id); wipeLocalForRoom(r.code); }catch(e){ failed++; }
+        try{ for(const id of r.personIds)await Store.removePerson(r.code,id); await removeMeFromConfirmed(r.code,r.room,r.ids); wipeLocalForRoom(r.code); }catch(e){ failed++; }
       }
       closeSheet();
       if(failed>0){
