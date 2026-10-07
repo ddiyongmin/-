@@ -290,6 +290,9 @@ table.timetable th,table.timetable td{border:none;}
 .statchip{display:inline-flex; align-items:center; gap:5px; padding:6px 12px 6px 13px; border-radius:999px; font-size:13px; font-weight:700; line-height:1;}
 .statchip svg{display:inline-block; vertical-align:-2px;}
 .statchip.done{background:var(--gold); color:#2D2D2D;}
+.chip.sel{background:var(--brand); border-color:var(--brand); color:#fff;}
+#roomBody{flex:1;}
+@media (max-width:360px){ .topbar .modeic, .topbar [data-act=theme]{display:none;} }
 .statchip.pending{background:transparent; color:var(--ink-soft); border:1.5px dashed var(--line-strong); font-weight:600;}
 .statsummary{font-size:13px; color:var(--ink-soft); margin:-2px 0 8px; font-weight:600;}
 .rankcard .cond{color:var(--ink-soft);}
@@ -325,16 +328,21 @@ function todayISO(){return toISODate(new Date());}
 function addDaysISO(iso,n){const d=new Date(iso+'T00:00:00');d.setDate(d.getDate()+n);return toISODate(d);}
 const DOW=['일','월','화','수','목','금','토'];
 function dateLabel(iso,withYear){const d=new Date(iso+'T00:00:00');return (withYear?(d.getFullYear()+'년 '):'')+(d.getMonth()+1)+'월 '+d.getDate()+'일('+DOW[d.getDay()]+')';}
+function durText(m){const h=Math.floor(m/60),r=m%60;return ((h?h+'시간':'')+(h&&r?' ':'')+(r?r+'분':''))||'0분';}
+function inviteText(code,name){
+  const link=baseUrl()+'#room='+code;
+  return `📅 ${name||'회의'}\n아래 링크를 누르면 바로 들어와서 가능한 시간을 표시할 수 있어요.\n${link}\n(링크가 안 열리면 코드 ${code}로 직접 입장해주세요)`;
+}
 function minToHHMM(m){return pad(Math.floor(m/60)%24)+':'+pad(m%60);}
 function cmpDate(a,b){return a<b?-1:a>b?1:0;}
 async function copyText(text){
-  try{await navigator.clipboard.writeText(text);toast('복사했어요 📋');return;}catch(e){}
+  try{await navigator.clipboard.writeText(text);toast('복사했어요');return;}catch(e){}
   try{
     const ta=document.createElement('textarea');
     ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
     document.body.appendChild(ta);ta.focus();ta.select();
     document.execCommand('copy');document.body.removeChild(ta);
-    toast('복사했어요 📋');
+    toast('복사했어요');
   }catch(e2){
     window.prompt('복사에 실패했어요. 아래 내용을 직접 선택해 복사해주세요.',text);
   }
@@ -392,7 +400,7 @@ function toggleFav(code,name){
   if(f.some(r=>r.code===code)){f=f.filter(r=>r.code!==code);LS.set('cimo:favorites',f);toast('즐겨찾기에서 제거했어요');}
   else{
     if(f.length>=20){toast('즐겨찾기는 최대 20개까지 가능해요');return;}
-    f.unshift({code,name});LS.set('cimo:favorites',f);toast('즐겨찾기에 추가했어요 ☆');
+    f.unshift({code,name});LS.set('cimo:favorites',f);toast('즐겨찾기에 추가했어요');
   }
 }
 /* 내 목록에서 나가기: 즐겨찾기·최근 방 목록에서만 지워요.
@@ -421,11 +429,14 @@ function clearMyProfile(){LS.set('cimo:myProfile',null);}
 function profileTitle(gp){if(!gp||!gp.rank)return '';return gp.dept?(gp.dept+' · '+gp.rank):gp.rank;}
 const DEPTS=['CM','TMT','IME','FS'];
 const RANKS=['주니어','시니어','매니저','디렉터'];
+/* 직급은 앱 전체에서 반드시 RANKS 목록 중 하나여야 해요(직접 타이핑 금지) */
+function isValidRank(r){return RANKS.indexOf(rankOf(r||''))>=0;}
+function profileValid(gp){return !!(gp && gp.name && RANKS.indexOf(gp.rank)>=0);}
 let PD=null; // 내 정보 탭에서 저장 전 임시로 들고 있는 입력값
 let profileEditMode=false; // true면 수정 폼, false면 저장된 프로필 카드
 function initProfileDraft(){
   const gp=getMyProfile();
-  PD = gp? {name:gp.name||'',dept:gp.dept||null,rank:gp.rank||null} : {name:'',dept:null,rank:null};
+  PD = gp? {name:gp.name||'',dept:gp.dept||null,rank:(RANKS.indexOf(gp.rank)>=0?gp.rank:null)} : {name:'',dept:null,rank:null};
   /* 목록에 없는 부서로 저장돼 있으면 '직접 입력' 상태로 열어요 */
   PD.deptCustom = !!(PD.dept && DEPTS.indexOf(PD.dept)<0);
   PD.deptText = PD.deptCustom ? PD.dept : '';
@@ -490,6 +501,18 @@ async function initCaps(){
   saveMode = dbNS ? 'shared' : 'local';
 }
 
+/* Claude 공유 DB의 문서 ID에는 '|', 공백, '·' 같은 문자를 쓸 수 없어서
+   참여자 ID(이름|직급)를 16진수로 바꿔서 저장해요. 문서 안의 데이터는 그대로예요. */
+function safeDocId(id){return 'p_'+Array.from(new TextEncoder().encode(String(id))).map(b=>b.toString(16).padStart(2,'0')).join('');}
+/* 공유 저장에 실패했을 때 조용히 이 기기에만 저장하면, 화면은 공유 저장소를 읽기 때문에
+   "저장은 됐는데 결과에 안 보이는" 상태가 돼요. 그래서 실패를 숨기지 않고 알려요. */
+function sharedWriteError(where,e){
+  console.error('공유 저장 실패 ('+where+')',e);
+  const msg=(e&&(e.message||e.code))||'알 수 없는 오류';
+  const err=new Error('공유 저장에 실패했어요: '+msg);
+  err.shared=true;
+  return err;
+}
 const Store={
   async getRoom(code){
     if(sb && code!=='202610'){
@@ -513,11 +536,11 @@ const Store={
         saveMode='shared';
         window.dispatchEvent(new Event('cimo:change:'+code));
         return;
-      }catch(e){ saveMode='local'; }
+      }catch(e){ throw sharedWriteError('rooms',e); }
     }
     if(dbNS && code!=='202610'){
       try{ await dbNS.doc('rooms/'+code).set(data); saveMode='shared'; window.dispatchEvent(new Event('cimo:change:'+code)); return; }
-      catch(e){ saveMode='local'; toast('저장 권한이 없어 이 기기에만 저장돼요'); }
+      catch(e){ throw sharedWriteError('rooms',e); }
     }
     LS.set('cimo:room:'+code,data);
     window.dispatchEvent(new Event('cimo:change:'+code));
@@ -546,11 +569,11 @@ const Store={
         saveMode='shared';
         window.dispatchEvent(new Event('cimo:change:'+code));
         return;
-      }catch(e){ saveMode='local'; }
+      }catch(e){ throw sharedWriteError('participants',e); }
     }
     if(dbNS && code!=='202610'){
-      try{ await dbNS.collection('rooms/'+code+'/people').doc(person.id).set(person); saveMode='shared'; window.dispatchEvent(new Event('cimo:change:'+code)); return; }
-      catch(e){ saveMode='local'; toast('저장 권한이 없어 이 기기에만 저장돼요'); }
+      try{ await dbNS.collection('rooms/'+code+'/people').doc(safeDocId(person.id)).set(person); saveMode='shared'; window.dispatchEvent(new Event('cimo:change:'+code)); return; }
+      catch(e){ throw sharedWriteError('participants',e); }
     }
     let ps=LS.get('cimo:people:'+code,[]);
     const i=ps.findIndex(p=>p.id===person.id);
@@ -561,52 +584,16 @@ const Store={
   watch(code,cb){
     if(sb && code!=='202610'){
       try{
-        /* 실시간 연결이 한도(동시 접속 수 제한 등)로 거절되거나 끊기면,
-           그 사람만 몇 초마다 직접 확인하는 방식(폴링)으로 대신해요.
-           실시간이 정상인 사람은 폴링을 하지 않아요. 내용이 바뀐 경우에만 화면을 갱신해요. */
-        let pollTimer=null,lastSig=null,stopped=false,pollBusy=false;
-        const sigOf=async()=>{
-          const r=await Store.getRoom(code),p=await Store.getPeople(code);
-          return JSON.stringify([r,p]);
-        };
-        const pollOnce=async()=>{
-          if(stopped||pollBusy||document.hidden)return;
-          pollBusy=true;
-          try{
-            const sig=await sigOf();
-            if(stopped)return;
-            if(lastSig!==null&&sig!==lastSig)cb();
-            lastSig=sig;
-          }catch(e){}
-          finally{pollBusy=false;}
-        };
-        const startPoll=()=>{
-          if(pollTimer||stopped)return;
-          sigOf().then(s=>{ if(lastSig===null)lastSig=s; }).catch(()=>{});
-          // 6~10초 사이로 흩뿌려서, 여러 명이 같은 순간에 몰려 요청하지 않게 해요
-          const loop=()=>{
-            pollTimer=setTimeout(async()=>{ await pollOnce(); if(!stopped&&pollTimer)loop(); },6000+Math.random()*4000);
-          };
-          loop();
-        };
-        const stopPoll=()=>{ if(pollTimer){clearTimeout(pollTimer);pollTimer=null;} };
-        const onVis=()=>{ if(!document.hidden&&pollTimer)pollOnce(); }; // 탭으로 돌아오면 바로 한 번 확인
-        document.addEventListener('visibilitychange',onVis);
         const ch=sb.channel('cimo-room-'+code+'-'+Math.random().toString(36).slice(2))
           .on('postgres_changes',{event:'*',schema:'public',table:'rooms',filter:'code=eq.'+code},()=>cb())
           .on('postgres_changes',{event:'*',schema:'public',table:'participants',filter:'room_code=eq.'+code},()=>cb())
-          .subscribe((status)=>{
-            if(stopped)return;
-            if(status==='SUBSCRIBED'){ stopPoll(); }
-            else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){ startPoll(); }
-          });
-        // 연결 응답이 아예 없는 경우도 대비: 8초 안에 SUBSCRIBED가 안 되면 폴링 시작
-        const guard=setTimeout(()=>{ if(!stopped&&ch.state!=='joined')startPoll(); },8000);
-        return ()=>{
-          stopped=true; clearTimeout(guard); stopPoll();
-          document.removeEventListener('visibilitychange',onVis);
-          try{sb.removeChannel(ch);}catch(e){}
-        };
+          .subscribe();
+        /* Supabase 실시간 기능이 테이블에 켜져 있지 않아도 갱신되도록,
+           내가 저장했을 때 + 5초마다 한 번씩도 다시 불러와요 */
+        const h=()=>cb();
+        window.addEventListener('cimo:change:'+code,h);
+        const poll=setInterval(()=>{ if(!document.hidden)cb(); },5000);
+        return ()=>{ try{sb.removeChannel(ch);}catch(e){} window.removeEventListener('cimo:change:'+code,h); clearInterval(poll); };
       }catch(e){}
     }
     if(dbNS && code!=='202610'){
@@ -627,7 +614,10 @@ function personKey(name,title){return (name||'').trim()+'|'+(title||'').trim();}
 /* ============================= 예시 방 시드 ============================= */
 async function seedDemo(){
   const code='202610';
-  if(await Store.getRoom(code))return;
+  const SEED_V=2; // 예시 방 데이터 버전: 직급을 RANKS 목록으로 통일
+  const ex=await Store.getRoom(code);
+  if(ex && ex.seedV===SEED_V)return;
+  if(ex) LS.set('cimo:people:'+code,[]); // 예전 예시 데이터(팀장·대리 등)는 지우고 다시 만들어요
   const d0=todayISO();
   const dates=[addDaysISO(d0,1),addDaysISO(d0,2),addDaysISO(d0,3)];
   const pwHash=await sha256Hex('0000');
@@ -635,20 +625,20 @@ async function seedDemo(){
     code,name:'10월 정기 회의 (예시 방)',details:'이용 방법을 보여드리는 예시 방이에요. 자유롭게 눌러보세요.',
     dates,timeStart:540,timeEnd:1080,unit:30,durationMin:120,
     deadline:{mode:'manual',value:addDaysISO(d0,7)+'T00:00'},
-    manager:{name:'김회시',title:'팀장'},totalCount:5,
-    required:[{type:'name',name:'김회시',title:'팀장'},{type:'name',name:'이모음',title:'대리'}],
-    pwHash,confirmed:null,createdAt:Date.now()
+    manager:{name:'김회시',title:'디렉터'},totalCount:5,
+    required:[{type:'name',name:'김회시',title:'디렉터'},{type:'name',name:'이모음',title:'매니저'}],
+    pwHash,confirmed:null,createdAt:Date.now(),seedV:SEED_V
   };
   await Store.setRoom(code,room);
   const cellsPerDay=(room.timeEnd-room.timeStart)/room.unit; // 18
   function bits(avail){const a=new Array(dates.length*cellsPerDay).fill('0');avail.forEach(i=>a[i]='1');return a.join('');}
   // 날짜0=내일,1=모레,2=글피 / 2시간 소요=4칸
   const people=[
-    {id:personKey('김회시','팀장'),name:'김회시',title:'팀장',cells:bits([...range(2,2+4),...range(cellsPerDay+0,cellsPerDay+4)])},
-    {id:personKey('이모음','대리'),name:'이모음',title:'대리',cells:bits([...range(2,2+4),...range(cellsPerDay+4,cellsPerDay+8)])},
-    {id:personKey('박참석','사원'),name:'박참석',title:'사원',cells:bits([...range(2,2+4)])},
-    {id:personKey('최가능','사원'),name:'최가능',title:'사원',cells:bits([...range(2,2+4),...range(2*cellsPerDay+6,2*cellsPerDay+10)])},
-    {id:personKey('정시간','주임'),name:'정시간',title:'주임',cells:bits([...range(2,2+4)])}
+    {id:personKey('김회시','디렉터'),name:'김회시',title:'디렉터',cells:bits([...range(2,2+4),...range(cellsPerDay+0,cellsPerDay+4)])},
+    {id:personKey('이모음','매니저'),name:'이모음',title:'매니저',cells:bits([...range(2,2+4),...range(cellsPerDay+4,cellsPerDay+8)])},
+    {id:personKey('박참석','주니어'),name:'박참석',title:'주니어',cells:bits([...range(2,2+4)])},
+    {id:personKey('최가능','주니어'),name:'최가능',title:'주니어',cells:bits([...range(2,2+4),...range(2*cellsPerDay+6,2*cellsPerDay+10)])},
+    {id:personKey('정시간','시니어'),name:'정시간',title:'시니어',cells:bits([...range(2,2+4)])}
   ];
   for(const p of people)await Store.setPerson(code,p);
   function range(a,b){const r=[];for(let i=a;i<b;i++)r.push(i);return r;}
@@ -738,7 +728,7 @@ function computeTop3(room,people){
       const idxs=[];for(let k=0;k<wl;k++)idxs.push(dIdx*cpd+s+k);
       const req=reqSatisfiedForWindow(room,people,idxs);
       const totalAvail=people.filter(p=>idxs.every(i=>p.cells[i]==='1')).length;
-      out.push({date,dIdx,start:room.timeStart+s*room.unit,end:room.timeStart+(s+wl)*room.unit,req,totalAvail,idxs});
+      out.push({date,dIdx,start:room.timeStart+s*room.unit,end:room.timeStart+s*room.unit+room.durationMin,req,totalAvail,idxs});
     }
   });
   const reqCount=room.required.length;
@@ -759,7 +749,7 @@ function computeTop3(room,people){
   const top=[];
   for(const w of elig){
     if(top.length>=3)break;
-    if(top.some(t=>t.date===w.date&&t.start===w.start))continue;
+    if(top.some(t=>t.date===w.date&&w.start<t.end&&t.start<w.end))continue; // 시간이 겹치는 구간은 한 번만 추천
     top.push(w);
   }
   /* 등급·인원수가 같아도 공동 순위로 묶지 않고, 이미 정렬된 순서(날짜 빠른 순 → 시간 빠른 순)
@@ -774,7 +764,7 @@ function computeTop3(room,people){
     if(refs.length>=3)break;
     if(w.totalAvail===0||w.totalAvail<=topMax)break; // 정렬돼 있으니 여기서부턴 더 볼 필요 없어요
     if(top.includes(w))continue;
-    if(refs.some(r=>r.date===w.date&&r.start===w.start))continue;
+    if(refs.some(r=>r.date===w.date&&w.start<r.end&&r.start<w.end))continue;
     refs.push(w);
   }
   refs.forEach((w,i)=>{ w.refRank=i+1; w.missing=missingReqs(room,people,w.idxs); });
@@ -835,7 +825,7 @@ async function loadBusy(code){
     codes.delete(code); codes.delete('202610');
     const keys=new Set();
     const gp=getMyProfile();
-    if(gp&&gp.name&&gp.dept&&gp.rank)keys.add(personKey(gp.name,profileTitle(gp)));
+    if(profileValid(gp))keys.add(personKey(gp.name,profileTitle(gp)));
     if(App.me&&App.code===code)keys.add(personKey(App.me.name,App.me.title));
     const out=[];
     for(const c of codes){
@@ -853,6 +843,21 @@ async function loadBusy(code){
     if(App.tab==='input' && App.room && out.some(b=>App.room.dates.includes(b.date)))renderRoomBody();
   }catch(err){ console.error('다른 회의 일정을 불러오는 중 오류',err); }
 }
+/* 참가자 입력 화면에서 적던 이름·부서(직접 입력)가 다시 그릴 때 사라지지 않게 옮겨둬요 */
+function syncIdDraft(){
+  if(!App.draft)return;
+  const fi=$('#f_iname'); if(fi)App.draft.name=fi.value;
+  const dc=$('#f_idept_custom'); if(dc)App.draft.deptText=dc.value;
+}
+/* 방 데이터를 저장소에서 다시 읽어 화면을 최신으로 맞춰요 */
+async function refreshRoomData(){
+  const code=App.code; if(!code)return;
+  try{
+    const r=await Store.getRoom(code),p=await Store.getPeople(code);
+    if(App.code!==code||App.screen!=='room')return;
+    if(r)App.room=r; App.people=p;
+  }catch(err){ console.error('방 데이터를 다시 불러오는 중 오류',err); }
+}
 function busyAt(date,t1,t2){ return (App.busy||[]).find(b=>b.date===date && b.start<t2 && b.end>t1) || null; }
 async function openRoom(code,tab){
   const myToken=bumpNav();
@@ -867,13 +872,17 @@ async function openRoom(code,tab){
     /* 내 정보에 전역 프로필을 저장해뒀다면, 그 방에 예전에 다른 이름으로 남아있던
        기록보다 "지금의 나"를 항상 우선해요 — 그래야 매번 안 바뀌어요. */
     const gp=getMyProfile();
-    if(gp && gp.name && gp.rank){
-      const t=profileTitle(gp);
+    if(profileValid(gp)){
+      /* 이 방에 같은 이름·직급으로 먼저 입력한 기록이 있으면(부서 표기만 다른 경우 등)
+         새 사람으로 하나 더 만들지 않고 그 기록을 이어서 써요 */
+      const prev=people.find(p=>p.name===gp.name&&rankOf(p)===gp.rank);
+      const t=prev?prev.title:profileTitle(gp);
       App.me={name:gp.name,title:t};
       setIdentity(code,gp.name,t);
     } else { App.me=getIdentity(code); }
     App.tab=tab||(room.confirmed||code==='202610'?'results':'input');
-    App.draft={pendingCells:null,name:'',title:''};
+    App.draft={pendingCells:null,name:'',title:'',rank:'',dept:null,deptCustom:false,deptText:''};
+    App._personSel=null;
     pushRecent(code,room.name);
     App.busy=[];
     App.unwatch=Store.watch(code,async()=>{
@@ -882,6 +891,9 @@ async function openRoom(code,tab){
         const r=await Store.getRoom(code),p=await Store.getPeople(code);
         if(App.code!==code)return;
         App.room=r;App.people=p;
+        /* 시간 입력 중에는 다른 사람의 변경으로 표를 다시 그리지 않아요(스크롤·선택이 튀지 않게).
+           단, 확정·마감으로 잠기면 바로 보여줘요. */
+        if(App.tab==='input' && App.me && !isLocked(r))return;
         renderRoomBody();
       }catch(err){ console.error('실시간 갱신 중 오류',err); }
     });
@@ -930,8 +942,11 @@ function afterProfileRender(){
 function renderRoomBody(){
   const body=$('#roomBody');
   if(!body)return;
+  const g=$('#gridWrap'),gs=g?{t:g.scrollTop,l:g.scrollLeft}:null,ws=window.scrollY;
   body.innerHTML=vRoomBody();
   afterRoomRender();
+  const g2=$('#gridWrap');if(g2&&gs){g2.scrollTop=gs.t;g2.scrollLeft=gs.l;}
+  window.scrollTo(0,ws);
 }
 
 /* ---------- 홈 : 내 모임 ---------- */
@@ -1263,8 +1278,8 @@ function resetDraft(){
   Object.assign(C,{
     name:'',details:'',showDetails:null,
     dates:[],calYear:new Date().getFullYear(),calMonth:new Date().getMonth(),
-    timeStart:0,timeEnd:1440,unit:30,
-    durMode:'2h',durCustomH:1,durCustomM:0,
+    timeStart:0,timeEnd:1440,unit:60,
+    durMode:'1h',durCustomH:1,durCustomM:0,
     deadlineMode:'auto',deadlineValue:null,
     total:1, minCount:null,
     required:[],reqName:'',reqRank:null,
@@ -1304,7 +1319,7 @@ function vCreate(){
     <div class="card">
       <div class="sectitle">시간 단위 (표 한 칸)</div>
       <div class="segrow" style="margin-top:8px;">
-        ${[15,30,60].map(u=>`<button class="seg ${C.unit===u?'on':''}" data-act="setUnit" data-v="${u}">${u}분</button>`).join('')}
+        ${[60,30,15].map(u=>`<button class="seg ${C.unit===u?'on':''}" data-act="setUnit" data-v="${u}">${u}분</button>`).join('')}
       </div>
     </div>
 
@@ -1353,7 +1368,7 @@ function vCreate(){
     </div>
 
     <div class="field">
-      <label>방장 비밀번호 (4자 이상)</label>
+      <label>담당자 비밀번호 (4자 이상)</label>
       <input type="password" id="f_pw" placeholder="확정·설정 수정 시 사용해요" value="${esc(C.pw)}">
     </div>
 
@@ -1364,7 +1379,7 @@ function vCreate(){
 }
 function renderCreatorAsManager(){
   const gp=getMyProfile();
-  if(gp && gp.name && gp.rank){
+  if(profileValid(gp)){
     return `<div class="row" style="gap:10px;">
       ${profileAvatar(gp.name,40)}
       <div><div style="font-weight:700;">${esc(gp.name)}</div><div class="muted" style="font-size:12.5px;">${esc(profileTitle(gp))}</div></div>
@@ -1415,7 +1430,7 @@ function renderCalendar(){
 }
 function renderReqChips(){
   if(!C.required.length)return '<span class="chip pinned">담당자 (고정)</span>';
-  return '<span class="chip pinned">담당자 (고정)</span>'+C.required.map((r,i)=>`<span class="chip x">${esc(r.type==='name'?(r.name+' · '+r.title):('직급: '+r.title))}<button data-act="rmReq" data-v="${i}">✕</button></span>`).join('');
+  return '<span class="chip pinned">담당자 (고정)</span>'+C.required.map((r,i)=>`<span class="chip x">${esc(r.type==='name'?(r.name+' '+r.title):('직급: '+r.title))}<button data-act="rmReq" data-v="${i}">✕</button></span>`).join('');
 }
 function afterCreateRender(){
   const n=$('#f_name');
@@ -1451,7 +1466,7 @@ const createActions={
   reqRank:(v)=>{const el=$('#f_reqname');if(el)C.reqName=el.value;C.reqRank=(C.reqRank===v?null:v);render();},
   addReq:()=>{
     const el=$('#f_reqname');const nm=(el?el.value:(C.reqName||'')).trim(),ti=C.reqRank;
-    if(!ti){if(el)C.reqName=el.value;toast('직급을 선택해주세요');return;}
+    if(!ti||RANKS.indexOf(ti)<0){if(el)C.reqName=el.value;toast('직급을 선택해주세요');return;}
     const dup=C.required.some(r=>nm?(r.type==='name'&&r.name===nm&&rankOf(r.title)===ti):(r.type==='title'&&rankOf(r.title)===ti));
     if(dup){toast('이미 추가한 필참자예요');return;}
     C.required.push(nm?{type:'name',name:nm,title:ti}:{type:'title',title:ti});
@@ -1463,14 +1478,15 @@ const createActions={
   submitCreate:async()=>{
     const errEl=$('#createErr');errEl.textContent='';
     const gp=getMyProfile();
-    if(!gp||!gp.name||!gp.rank){errEl.textContent='담당자 정보가 필요해요. 먼저 "내 정보"에서 이름·직급을 등록해주세요.';return;}
+    if(!profileValid(gp)){errEl.textContent='담당자 정보가 필요해요. 먼저 "내 정보"에서 이름·직급을 등록해주세요.';return;}
     if(!C.name.trim()){errEl.textContent='모임 이름을 입력해주세요.';return;}
     if(!C.dates.length){errEl.textContent='날짜를 1개 이상 선택해주세요.';return;}
+    if(C.timeEnd<=C.timeStart){errEl.textContent='시간대의 끝 시각이 시작 시각보다 늦어야 해요.';return;}
     const durationMin=C.durMode==='1h'?60:C.durMode==='2h'?120:C.durMode==='3h'?180:(C.durCustomH*60+C.durCustomM);
     if(durationMin<=0){errEl.textContent='소요 시간을 확인해주세요.';return;}
     if(durationMin>(C.timeEnd-C.timeStart)){errEl.textContent='소요 시간이 시간대보다 길어요.';return;}
     if(C.required.length+1>C.total){errEl.textContent='필참자 수가 총 인원보다 많아요.';return;}
-    if(!C.pw||C.pw.length<4){errEl.textContent='방장 비밀번호는 4자 이상이어야 해요.';return;}
+    if(!C.pw||C.pw.length<4){errEl.textContent='담당자 비밀번호는 4자 이상이어야 해요.';return;}
     let code;
     for(let i=0;i<30;i++){const c=String(Math.floor(100000+Math.random()*900000));if(c!=='202610' && !(await Store.getRoom(c))){code=c;break;}}
     if(!code){errEl.textContent='코드 생성에 실패했어요. 다시 시도해주세요.';return;}
@@ -1498,7 +1514,7 @@ const createActions={
 function vCreated(){
   const code=App.code;
   const link=baseUrl()+'#room='+code;
-  const invite=`📅 회의 시간 투표에 참여해주세요!\n아래 링크를 누르면 바로 들어와서 가능한 시간을 표시할 수 있어요.\n${link}\n(링크가 안 열리면 코드 ${code}로 직접 입장해주세요)`;
+  const invite=inviteText(code,(getRecents().find(r=>r.code===code)||{}).name||'');
   return `
   <div class="scr" style="align-items:center;text-align:center;padding-top:60px;">
     <div class="donebig">${IC.check(32)}</div>
@@ -1517,7 +1533,7 @@ function vRoom(){
   <div class="topbar">
     <button class="iconbtn" data-act="goHome" aria-label="뒤로">${IC.back(22)}</button>
     <div class="title">${esc(App.room.name)}</div>
-    <button class="star ${isFav(App.code)?'on':''}" data-act="fav">☆</button>
+    <button class="star ${isFav(App.code)?'on':''}" data-act="fav" aria-label="즐겨찾기">${isFav(App.code)?'★':'☆'}</button>
     <button class="roomchip" data-act="copyInvite" data-code="${App.code}"><b>${App.code}</b> <span class="ico">${IC.copy(14)}</span></button>
     <span class="modeic" title="${App.code==='202610'?'예시 방':(saveMode==='shared'?'공유 저장 모드':'미리보기 모드')}">${App.code==='202610'?IC.flask(17):(saveMode==='shared'?IC.link(17):IC.device(17))}</span>
     <button class="iconbtn" data-act="theme" aria-label="테마 전환">${getTheme()==='dark'?IC.sun(19):IC.moon(19)}</button>
@@ -1525,9 +1541,9 @@ function vRoom(){
   </div>
   <div id="roomBody">${vRoomBody()}</div>
   <div class="tabs">
-    ${App.room.confirmed?'':`<button class="tab ${App.tab==='input'?'on':''}" data-act="tab" data-v="input">${icoTab(IC.pen)}시간입력</button>`}
-    <button class="tab ${App.tab==='results'?'on':''}" data-act="tab" data-v="results">${icoTab(IC.trophy)}추천결과</button>
-    <button class="tab ${App.tab==='status'?'on':''}" data-act="tab" data-v="status">${icoTab(IC.users)}참여현황</button>
+    ${App.room.confirmed?'':`<button class="tab ${App.tab==='input'?'on':''}" data-act="tab" data-v="input">${icoTab(IC.pen)}시간 입력</button>`}
+    <button class="tab ${App.tab==='results'?'on':''}" data-act="tab" data-v="results">${icoTab(IC.trophy)}추천 결과</button>
+    <button class="tab ${App.tab==='status'?'on':''}" data-act="tab" data-v="status">${icoTab(IC.users)}참여 현황</button>
   </div>`;
 }
 function vRoomBody(){
@@ -1555,9 +1571,17 @@ function vInput(){
     return `
     <div class="card">
       <div class="sectitle" style="margin-bottom:8px;">이름을 입력해주세요</div>
-      ${chips.length?`<div class="chiprow" style="margin-bottom:10px;">${chips.map(r=>`<span class="chip" data-act="fillId" data-name="${esc(r.name)}" data-title="${esc(r.title)}">${esc(r.name)} · ${esc(r.title)}</span>`).join('')}</div>`:''}
-      <div class="field"><label>이름</label><input type="text" id="f_iname" placeholder="이름"></div>
-      <div class="field" style="margin-top:10px;"><label>직급</label><input type="text" id="f_ititle" placeholder="직급"></div>
+      ${chips.length?`<div class="chiprow" style="margin-bottom:10px;">${chips.map(r=>`<span class="chip" data-act="fillId" data-name="${esc(r.name)}" data-title="${esc(r.title)}">${esc(r.name)} ${esc(r.title)}</span>`).join('')}</div>`:''}
+      <div class="field"><label>이름</label><input type="text" id="f_iname" placeholder="이름" value="${esc(App.draft.name||'')}"></div>
+      <div class="field" style="margin-top:10px;"><label>부서 <span style="font-weight:400;color:var(--ink-faint);">선택</span></label>
+        <div class="segrow">${DEPTS.map(d=>`<button class="seg ${!App.draft.deptCustom&&App.draft.dept===d?'on':''}" data-act="idDept" data-v="${d}">${d}</button>`).join('')}<button class="seg ${App.draft.deptCustom?'on':''}" data-act="idDept" data-v="__custom">직접 입력</button></div>
+        ${App.draft.deptCustom?`<input type="text" id="f_idept_custom" placeholder="부서명 입력 (예: Deals)" maxlength="20" value="${esc(App.draft.deptText||'')}">`:''}
+        <div class="muted" style="font-size:12px;">비워둬도 돼요. 선택한 부서를 한 번 더 누르면 해제돼요.</div>
+      </div>
+      <div class="field" style="margin-top:10px;"><label>직급</label>
+        <div class="segrow">${RANKS.map(r=>`<button class="seg ${App.draft.rank===r?'on':''}" data-act="idRank" data-v="${r}">${r}</button>`).join('')}</div>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:8px;">"내 정보"에 등록해두면 다음부터는 이 화면 없이 바로 입력할 수 있어요.</div>
       <div id="dupMsg"></div>
       <button class="btn btn-primary" style="margin-top:12px;" data-act="checkId">다음</button>
     </div>`;
@@ -1573,7 +1597,7 @@ function vInput(){
   const existing=people.find(p=>p.id===personKey(App.me.name,App.me.title));
   if(!App.draft.pendingCells)App.draft.pendingCells=(existing?existing.cells:'0'.repeat(room.dates.length*cpd)).split('');
   return `
-  <div class="row between"><span style="font-weight:700;">${esc(App.me.name)} · ${esc(App.me.title)}</span><button class="btn-text" data-act="switchId">다른 이름</button></div>
+  <div class="row between"><span style="font-weight:700;">${esc(App.me.name)} ${esc(App.me.title)}</span><button class="btn-text" data-act="switchId">다른 이름</button></div>
   <div class="muted">칸을 눌러 가능한 시간을 표시해주세요. PC는 드래그로 칠할 수 있어요.</div>
   ${(App.busy||[]).some(b=>room.dates.includes(b.date))?`<div class="muted" style="font-size:12px;"><span class="busy-legend"></span>회색 빗금은 이미 확정된 내 다른 회의예요. 선택은 그대로 할 수 있어요. (CIMO에서 잡은 일정만 표시돼요)</div>`:''}
   <div class="row" style="justify-content:flex-end;">
@@ -1606,17 +1630,40 @@ function renderInputTable(){
 /* ---- 추천 결과 ---- */
 /* 확정/마감 후 시간입력 화면에서 바로 보여주는 참여 현황 칩: 제출한 사람은 체크,
    아직 안 낸 필참자는 흐리게 "…"로 표시해요. 필참자는 ★ 표시. */
+/* 한 사람이 칠한 칸을 날짜별 연속 시간대로 묶어 보여줘요 (예: 09:00~11:00, 14:00~15:00) */
+function personRanges(room,p){
+  const cpd=cellsPerDayOf(room),out=[];
+  room.dates.forEach((d,dIdx)=>{
+    const rs=[];let s0=-1;
+    for(let s=0;s<=cpd;s++){
+      const on=s<cpd&&p.cells&&p.cells[dIdx*cpd+s]==='1';
+      if(on&&s0<0)s0=s;
+      if(!on&&s0>=0){rs.push(minToHHMM(room.timeStart+s0*room.unit)+'~'+(room.timeStart+s*room.unit>=1440?'24:00':minToHHMM(room.timeStart+s*room.unit)));s0=-1;}
+    }
+    if(rs.length)out.push({date:d,ranges:rs});
+  });
+  return out;
+}
+function personSlotsHtml(room,p){
+  if(!p)return '';
+  const list=personRanges(room,p);
+  return `<div class="card" style="padding:12px 14px;margin-top:8px;">
+    <div style="font-weight:700;font-size:14px;margin-bottom:6px;">${isReqPerson(room,p)?'★ ':''}${esc(p.name)} ${esc(p.title)}님이 고른 시간</div>
+    ${list.length?list.map(x=>`<div style="font-size:13.5px;padding:3px 0;display:flex;gap:10px;"><span style="min-width:96px;color:var(--ink-soft);">${dateLabel(x.date)}</span><span>${x.ranges.join(', ')}</span></div>`).join(''):'<div class="muted">가능한 시간이 없다고 입력했어요.</div>'}
+  </div>`;
+}
 function renderParticipationChips(){
   const room=App.room,people=App.people;
   const pendingReq=room.required.filter(r=>r.type==='name'&&!reqJoined(r,people));
   const restCount=Math.max(0,room.totalCount-people.length-pendingReq.length);
   const chips=[
-    ...people.map(p=>`<span class="statchip done">${isReqPerson(room,p)?'★ ':''}${esc(p.name)} ${esc(p.title)} ${IC.check(13)}</span>`),
+    ...people.map(p=>`<span class="statchip done" style="cursor:pointer;${App._personSel===p.id?'outline:2px solid var(--brand);':''}" data-act="personSlots" data-pid="${esc(p.id)}">${isReqPerson(room,p)?'★ ':''}${esc(p.name)} ${esc(p.title)} ${IC.check(13)}</span>`),
     ...pendingReq.map(r=>`<span class="statchip pending">★ ${esc(r.name)} ${esc(r.title)}</span>`),
     ...(restCount>0?[`<span class="statchip pending">그 외 ${restCount}명</span>`]:[])
   ];
   return `<div class="statsummary">${people.length}/${room.totalCount}명 입력 완료</div>
-    <div class="chiprow">${chips.join('')||'<span class="muted">아직 없어요</span>'}</div>`;
+    <div class="chiprow">${chips.join('')||'<span class="muted">아직 없어요</span>'}</div>
+    <div id="personPanel">${App._personSel?personSlotsHtml(room,people.find(p=>p.id===App._personSel)):''}</div>`;
 }
 /* TOP3 순위 카드만 뽑아내는 부분 — 확정/마감 후 간단히 보여줄 때나,
    추천결과 탭에서 자세히 보여줄 때나 똑같이 써요. */
@@ -1653,8 +1700,10 @@ function renderTop3Section(room,people){
     <button class="btn btn-primary btn-sm" id="rankChangeBtn" style="width:100%;" data-act="applyRankChange" disabled>순위를 선택해주세요</button>
     <button class="btn-text" data-act="cancelChange">취소</button>
   </div>` : '';
-  // 참고 순위는 조건을 충족하는 1~3순위가 하나도 없을 때만 보여줘요
-  const html=`${topBtns}<div style="display:flex;flex-direction:column;gap:10px;">${cards}</div>${changeBar}<div id="rankPanel" style="margin-top:2px;"></div>`;
+  /* 참고 카드: 추천 순위가 있어도, 그보다 더 많이 모이는 시간이 있으면 함께 보여줘요(기획안 B).
+     필참자 조건 때문에 빠진 시간이라, 방장이 필참자에게 조정 가능 여부를 물어볼 근거가 돼요. */
+  const refBlock = (refs&&refs.length) ? `<div class="sectitle" style="padding:0 2px;margin-top:6px;">참고 · 추천보다 더 많이 모이는 시간</div>${renderRefList(room,refs,changeMode)}` : '';
+  const html=`${topBtns}<div style="display:flex;flex-direction:column;gap:10px;">${cards}</div>${changeBar}<div id="rankPanel" style="margin-top:2px;"></div>${refBlock}`;
   return {html,top,refs,ok:true};
 }
 function renderRefList(room,refs,changeMode){
@@ -1695,7 +1744,7 @@ function vStatus(){
   const invite=`📅 ${room.name}\n아래 링크를 누르면 바로 들어와서 가능한 시간을 표시할 수 있어요.\n${link}\n(링크가 안 열리면 코드 ${App.code}로 직접 입장해주세요)`;
   return `
   <div class="card">
-    <div class="row between"><b>${done}명 중 ${total}명 완료</b><span class="muted">${pct}%</span></div>
+    <div class="row between"><b>${total}명 중 ${done}명 완료</b><span class="muted">${pct}%</span></div>
     <div class="progress ${full?'full':''}" style="margin-top:8px;"><b style="width:${pct}%"></b></div>
   </div>
   ${(()=>{
@@ -1712,16 +1761,18 @@ function vStatus(){
   })()}
   <div class="card">
     <div class="sectitle">완료</div>
-    <div class="chiprow" style="margin:8px 0 12px;">${doneNames.length?doneNames.map(n=>`<span class="chip">${esc(n)}</span>`).join(''):'<span class="muted">아직 없어요</span>'}</div>
-    <div class="sectitle">미입력 필참자</div>
-    <div class="chiprow" style="margin-top:8px;">${pendingReq.length?pendingReq.map(r=>`<span class="chip">★ ${esc(r.name)}·${esc(r.title)}</span>`).join(''):'<span class="muted">없어요</span>'}${restCount>0?`<span class="chip">그 외 ${restCount}명</span>`:''}</div>
+    <div class="muted" style="font-size:12px;margin-top:4px;">이름을 누르면 그 사람이 고른 시간을 볼 수 있어요.</div>
+    <div class="chiprow" style="margin:8px 0 4px;">${people.length?people.map(p=>`<span class="chip ${App._personSel===p.id?'sel':''}" data-act="personSlots" data-pid="${esc(p.id)}">${isReqPerson(room,p)?'★ ':''}${esc(p.name)} ${esc(p.title)}</span>`).join(''):'<span class="muted">아직 없어요</span>'}</div>
+    <div id="personPanel" style="margin-bottom:12px;">${App._personSel?personSlotsHtml(room,people.find(p=>p.id===App._personSel)):''}</div>
+    <div class="sectitle">미입력</div>
+    <div class="chiprow" style="margin-top:8px;">${pendingReq.map(r=>`<span class="chip">★ ${esc(r.name)} ${esc(r.title)}</span>`).join('')}${restCount>0?`<span class="chip">${pendingReq.length?'그 외 ':''}${restCount}명</span>`:''}${!pendingReq.length&&!restCount?'<span class="muted">모두 입력했어요</span>':''}</div>
   </div>
   <div class="card">
     <div class="sectitle">모임 정보</div>
     <div class="muted" style="margin-top:6px;line-height:1.7;">
       날짜: ${room.dates.map(d=>dateLabel(d)).join(', ')}<br>
       시간대: ${minToHHMM(room.timeStart)}~${room.timeEnd===1440?'24:00':minToHHMM(room.timeEnd)}<br>
-      소요 시간: ${Math.floor(room.durationMin/60)}시간 ${room.durationMin%60}분 · 단위 ${room.unit}분<br>
+      소요 시간: ${durText(room.durationMin)} · 단위 ${room.unit}분<br>
       마감: ${deadlineText(room)}<br>
       담당자: ${esc(room.manager.name)} ${esc(room.manager.title)}
     </div>
@@ -1745,7 +1796,7 @@ function bindGlobal(){
       if(globalActions[act]){await globalActions[act](el,v,code);return;}
     }catch(err){
       console.error('"'+act+'" 처리 중 오류',err);
-      toast('문제가 발생했어요. 다시 시도해주세요.');
+      toast(err&&err.shared? err.message : '문제가 발생했어요. 다시 시도해주세요.');
     }
   };
 }
@@ -1808,10 +1859,10 @@ const globalActions={
     if(dcEl)PD.dept=dcEl.value.trim()||null;
     const errEl=$('#profErr');
     if(!PD.name){errEl.textContent='이름을 입력해주세요.';return;}
-    if(!PD.rank){errEl.textContent='직급을 선택해주세요.';return;}
+    if(RANKS.indexOf(PD.rank)<0){errEl.textContent='직급을 선택해주세요.';return;}
     setMyProfile(PD.name,PD.dept,PD.rank);
     profileEditMode=false;
-    render();toast('등록했어요. 다음 방부터 자동으로 입력돼요 ✅');
+    render();toast('등록했어요. 다음 방부터 자동으로 입력돼요');
   },
   clearProfile:()=>{clearMyProfile();PD=null;profileEditMode=true;render();toast('등록을 해제했어요');},
   joinRoom:async()=>{
@@ -1830,7 +1881,7 @@ const globalActions={
     const c=code||App.code;
     const link=baseUrl()+'#room='+c;
     const name=App.room?App.room.name:(getFavorites().concat(getRecents()).find(r=>r.code===c)||{}).name||'회의';
-    copyText(`📅 ${name}\n아래 링크를 누르면 바로 들어와서 가능한 시간을 표시할 수 있어요.\n${link}\n(링크가 안 열리면 코드 ${c}로 직접 입장해주세요)`);
+    copyText(inviteText(c,name));
   },
   copyRemind:()=>{
     const link=baseUrl()+'#room='+App.code;
@@ -1838,22 +1889,44 @@ const globalActions={
     const dlLine=(r.deadline&&r.deadline.mode!=='none'&&r.deadline.value)?`투표 마감: ${deadlineText(r)}\n`:'';
     copyText(`⏰ ${r.name}\n아직 가능한 시간을 입력하지 않으셨다면 체크 부탁드려요 🙏\n${dlLine}${link}`);
   },
-  tab:(el,v)=>{App.tab=v;App.draft.pendingCells=null;render();},
-  fillId:(el)=>{$('#f_iname').value=el.getAttribute('data-name');$('#f_ititle').value=el.getAttribute('data-title');},
+  personSlots:(el)=>{const id=el.getAttribute('data-pid');App._personSel=(App._personSel===id?null:id);renderRoomBody();},
+  tab:async(el,v)=>{App.tab=v;App.draft.pendingCells=null;render();await refreshRoomData();if(App.tab===v&&App.screen==='room')renderRoomBody();},
+  fillId:(el)=>{
+    const t=el.getAttribute('data-title'),parts=splitTitle(t);
+    App.draft.name=el.getAttribute('data-name');
+    App.draft.rank=isValidRank(t)?parts.rank:'';
+    const d=parts.dept||null;
+    App.draft.deptCustom=!!(d&&DEPTS.indexOf(d)<0);
+    App.draft.dept=d&&!App.draft.deptCustom?d:null;
+    App.draft.deptText=App.draft.deptCustom?d:'';
+    render();
+  },
+  idDept:(el,v)=>{
+    syncIdDraft();
+    if(v==='__custom'){App.draft.deptCustom=!App.draft.deptCustom;App.draft.dept=null;}
+    else{App.draft.deptCustom=false;App.draft.dept=(App.draft.dept===v?null:v);}
+    render();
+    if(App.draft.deptCustom){const c=$('#f_idept_custom');if(c)c.focus();}
+  },
+  idRank:(el,v)=>{if(RANKS.indexOf(v)<0)return;syncIdDraft();App.draft.rank=v;render();},
   checkId:()=>{
-    const name=$('#f_iname').value.trim(),title=$('#f_ititle').value.trim();
-    if(!name||!title){$('#dupMsg').innerHTML='<div class="err">이름과 직급을 모두 입력해주세요.</div>';return;}
-    const exists=App.people.find(p=>p.name===name&&p.title===title);
+    syncIdDraft();
+    const name=(App.draft.name||'').trim(),rank=App.draft.rank;
+    const dept=(App.draft.deptCustom?(App.draft.deptText||'').trim().replace(/·/g,' '):App.draft.dept)||'';
+    const title=dept?(dept+' · '+rank):rank;
+    if(!name||!rank||RANKS.indexOf(rank)<0){$('#dupMsg').innerHTML='<div class="err">이름을 적고 직급을 선택해주세요.</div>';return;}
+    /* 부서 표기가 달라도 이름 + 직급이 같으면 같은 사람으로 보고, 기존 기록을 이어서 수정해요 */
+    const exists=App.people.find(p=>p.name===name&&rankOf(p)===rankOf(title));
     if(exists){
       $('#dupMsg').innerHTML=`<div class="banner-lock" style="margin-top:8px;">동일 정보가 기입되었습니다.
-        <div class="row" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" data-act="continueEdit" data-name="${esc(name)}" data-title="${esc(title)}">이어서 수정</button>
+        <div class="row" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" data-act="continueEdit" data-name="${esc(exists.name)}" data-title="${esc(exists.title)}">이어서 수정</button>
         <button class="btn-text" data-act="clearId">다른 이름 선택</button></div></div>`;
       return;
     }
     App.me={name,title};setIdentity(App.code,name,title);render();loadBusy(App.code);
   },
   continueEdit:(el)=>{App.me={name:el.getAttribute('data-name'),title:el.getAttribute('data-title')};setIdentity(App.code,App.me.name,App.me.title);render();loadBusy(App.code);},
-  clearId:()=>{$('#f_iname').value='';$('#f_ititle').value='';$('#dupMsg').innerHTML='';},
+  clearId:()=>{Object.assign(App.draft,{name:'',title:'',rank:'',dept:null,deptCustom:false,deptText:''});render();const fi=$('#f_iname');if(fi)fi.focus();},
   switchId:()=>{App.me=null;App.draft.pendingCells=null;render();},
   saveInput:async()=>{
     const person={id:personKey(App.me.name,App.me.title),name:App.me.name,title:App.me.title,cells:App.draft.pendingCells.join('')};
@@ -1862,8 +1935,16 @@ const globalActions={
       toast('참여 가능 인원이 모두 찼어요.');
       return;
     }
-    await Store.setPerson(App.code,person);
-    toast('저장했어요 ✅');
+    try{
+      await Store.setPerson(App.code,person);
+    }catch(err){
+      toast(err.shared? err.message : '저장하지 못했어요. 다시 시도해주세요.');
+      return;
+    }
+    await refreshRoomData();
+    App.tab='results';App.draft.pendingCells=null;
+    render();
+    toast('저장했어요. 추천 결과에 반영됐어요');
   },
   hlWindow:(el)=>{
     const idxs=el.getAttribute('data-idxs').split(',').map(Number);
@@ -1887,7 +1968,7 @@ const globalActions={
   },
 
   hostMenu:()=>{
-    openSheet(`<h3>방장 메뉴</h3>
+    openSheet(`<h3>담당자 메뉴</h3>
       <button class="btn btn-ghost" data-act="sheetConfirm">${App.room.confirmed?'확정 취소':'일정 확정'}</button>
       <button class="btn btn-ghost" data-act="sheetSettings">방 설정 수정</button>
       <button class="btn-text" data-act="closeSheet">닫기</button>`);
@@ -1928,7 +2009,7 @@ const globalActions={
     await Store.setRoom(App.code,App.room);
     closeSheet();render();
     if(!getConfetti(App.code).confirmed){setConfettiFlag(App.code,'confirmed');fireConfetti();}
-    toast(wasConfirmed?'일정을 변경했어요 ✅':'일정을 확정했어요 🎉');
+    toast(wasConfirmed?'일정을 변경했어요':'일정을 확정했어요');
   },
   selectRef:(el)=>{
     const idx=+el.getAttribute('data-i');
@@ -1982,7 +2063,7 @@ const globalActions={
     const date=$('#manualDate').value;
     const start=+$('#manualStart').value;
     const wl=windowLenOf(room),cpd=cellsPerDayOf(room);
-    const end=start+wl*room.unit;
+    const end=start+room.durationMin;
     const dIdx=room.dates.indexOf(date),s=(start-room.timeStart)/room.unit;
     const idxs=[];for(let k=0;k<wl;k++)idxs.push(dIdx*cpd+s+k);
     const attendees=attendeesForIdxs(App.people,idxs).map(p=>({name:p.name,title:p.title}));
@@ -1990,7 +2071,7 @@ const globalActions={
     await Store.setRoom(App.code,room);
     closeSheet();render();
     if(!getConfetti(App.code).confirmed){setConfettiFlag(App.code,'confirmed');fireConfetti();}
-    toast(wasConfirmed?'일정을 변경했어요 ✅':'일정을 확정했어요 🎉');
+    toast(wasConfirmed?'일정을 변경했어요':'일정을 확정했어요');
   },
   toggleReqPerson:(el)=>{ el.classList.toggle('on'); },
   sheetSettings:()=>{
@@ -2007,7 +2088,7 @@ async function doConfirmInternal(w){
   await Store.setRoom(App.code,App.room);
   closeSheet();render();
   if(!getConfetti(App.code).confirmed){setConfettiFlag(App.code,'confirmed');fireConfetti();}
-  toast(wasConfirmed?'일정을 변경했어요 ✅':'일정을 확정했어요 🎉');
+  toast(wasConfirmed?'일정을 변경했어요':'일정을 확정했어요');
 }
 /* 확정/변경 공통 피커: TOP3 중에서 고르거나, 직접 날짜·시간을 골라요.
    title/actionLabel만 다르게 줘서 "확정"과 "변경" 양쪽에 같이 써요. */
@@ -2021,7 +2102,7 @@ function openSchedulePicker(title,actionLabel){
     </button>`).join('');
   const wl=windowLenOf(room),cpd=cellsPerDayOf(room);
   let startOpts='';
-  for(let s=0;s+wl<=cpd;s++){ const t=room.timeStart+s*room.unit; startOpts+=`<option value="${t}">${minToHHMM(t)}~${minToHHMM(t+wl*room.unit)}</option>`; }
+  for(let s=0;s+wl<=cpd;s++){ const t=room.timeStart+s*room.unit; startOpts+=`<option value="${t}">${minToHHMM(t)}~${minToHHMM(t+room.durationMin)}</option>`; }
   openSheet(`<h3>${esc(title)}</h3>
     ${opts||'<div class="muted">추천 결과가 없어요</div>'}
     <hr class="sep">
@@ -2053,7 +2134,7 @@ function openSheet(html){
 }
 function closeSheet(){const o=$('#overlay');if(o)o.remove();}
 function askPassword(onOk){
-  openSheet(`<h3>방장 비밀번호</h3>
+  openSheet(`<h3>담당자 비밀번호</h3>
     <input type="password" id="pwInput" class="field" style="border:1px solid var(--line-strong);background:var(--bg-elev);color:var(--ink);border-radius:8px;padding:11px 12px;">
     <div id="pwErr" class="err"></div>
     <button class="btn btn-primary" id="pwOk">확인</button>
@@ -2078,7 +2159,7 @@ function openSettingsSheet(){
     <div class="field"><label>총 인원</label><input type="number" id="s_total" min="${Math.max(room.required.length,App.people.length)}" value="${room.totalCount}"></div>
     <div class="field"><label>최소 참석 인원 <span style="font-weight:400;color:var(--ink-faint);">비우면 과반</span></label><input type="number" id="s_min" min="1" placeholder="자동 (과반)" value="${room.minCount==null?'':room.minCount}"></div>
     <div class="field"><label>시작 시각 ${locked?'(입력자가 있어 수정 불가)':''}</label><select id="s_tstart" ${locked?'disabled':''}>${timeOptions(room.timeStart)}</select></div>
-    <div class="field"><label>시간 단위 ${locked?'(입력자가 있어 수정 불가)':''}</label><select id="s_unit" ${locked?'disabled':''}>${(room.unit===45?[15,30,45,60]:[15,30,60]).map(u=>`<option value="${u}" ${room.unit===u?'selected':''}>${u}분</option>`).join('')}</select></div>
+    <div class="field"><label>시간 단위 ${locked?'(입력자가 있어 수정 불가)':''}</label><select id="s_unit" ${locked?'disabled':''}>${(room.unit===45?[60,45,30,15]:[60,30,15]).map(u=>`<option value="${u}" ${room.unit===u?'selected':''}>${u}분</option>`).join('')}</select></div>
     <div class="field">
       <label>필참자 (링크로 들어온 사람 중 선택)</label>
       <div style="display:flex;flex-direction:column;">
@@ -2136,29 +2217,37 @@ globalActions.saveSettings=async()=>{
 
 /* ---------- 그리드 상호작용 (저장, 드래그) ---------- */
 function afterRoomRender(){
+  const fi=$('#f_iname'); if(fi)fi.oninput=e=>{App.draft.name=e.target.value;};
+  const dc=$('#f_idept_custom'); if(dc)dc.oninput=e=>{App.draft.deptText=e.target.value;};
   const grid=$('#gridWrap');
   if(grid && App.draft && App.draft.pendingCells){
-    let painting=false,paintVal=null;
+    /* 마우스는 드래그로 칠하고, 휴대폰은 '모바일 드래그 선택'을 켰을 때만 드래그로 칠해요.
+       끈 상태에서는 칸을 톡 누를 때(click)만 바뀌어서 표를 스크롤해도 칸이 바뀌지 않아요.
+       (예전엔 터치 후 따라오는 마우스 이벤트가 한 번 더 토글해서 휴대폰에서 칸이 선택되지 않았어요) */
+    let painting=false,paintVal=null,skipClick=false;
     const dragOn=()=>$('#dragToggle')&&$('#dragToggle').checked;
     function setCell(idx,val){App.draft.pendingCells[idx]=val?'1':'0';const c=$(`.cell[data-idx="${idx}"]`,grid);if(c)c.classList.toggle('on',val);}
-    grid.onmousedown=(e)=>{const c=e.target.closest('.cell');if(!c)return;painting=true;const idx=+c.getAttribute('data-idx');paintVal=App.draft.pendingCells[idx]!=='1';setCell(idx,paintVal);};
-    grid.onmouseover=(e)=>{if(!painting)return;const c=e.target.closest('.cell');if(!c)return;setCell(+c.getAttribute('data-idx'),paintVal);};
-    window.onmouseup=()=>{painting=false;};
-    grid.ontouchstart=(e)=>{
+    grid.style.touchAction=dragOn()?'none':'';
+    grid.onpointerdown=(e)=>{
       const c=e.target.closest('.cell');if(!c)return;
-      const idx=+c.getAttribute('data-idx');
-      if(dragOn()){painting=true;paintVal=App.draft.pendingCells[idx]!=='1';setCell(idx,paintVal);e.preventDefault();}
-      else{setCell(idx,App.draft.pendingCells[idx]!=='1');}
-    };
-    grid.ontouchmove=(e)=>{
-      if(!painting||!dragOn())return;
+      if(!(e.pointerType==='mouse'||dragOn()))return;
       e.preventDefault();
-      const t=e.touches[0];const el=document.elementFromPoint(t.clientX,t.clientY);
-      const c=el&&el.closest('.cell');if(!c)return;
+      painting=true;skipClick=true;
+      const idx=+c.getAttribute('data-idx');paintVal=App.draft.pendingCells[idx]!=='1';setCell(idx,paintVal);
+    };
+    window.onpointermove=(e)=>{
+      if(!painting)return;
+      const el=document.elementFromPoint(e.clientX,e.clientY);
+      const c=el&&el.closest&&el.closest('#gridWrap .cell');if(!c)return;
       setCell(+c.getAttribute('data-idx'),paintVal);
     };
-    grid.ontouchend=()=>{painting=false;};
-    const dt=$('#dragToggle');if(dt)dt.onchange=e=>LS.set('cimo:dragToggle',e.target.checked);
+    window.onpointerup=window.onpointercancel=()=>{painting=false;};
+    grid.onclick=(e)=>{
+      const c=e.target.closest('.cell');if(!c)return;
+      if(skipClick){skipClick=false;return;}
+      const idx=+c.getAttribute('data-idx');setCell(idx,App.draft.pendingCells[idx]!=='1');
+    };
+    const dt=$('#dragToggle');if(dt)dt.onchange=e=>{LS.set('cimo:dragToggle',e.target.checked);grid.style.touchAction=e.target.checked?'none':'';};
     if(App.room.timeStart===0){
       const rowH=26;const target=Math.max(0,(9*60-App.room.timeStart)/App.room.unit*rowH-40);
       grid.scrollTop=target;
