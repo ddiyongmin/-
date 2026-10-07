@@ -1,0 +1,2164 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CIMO · 회의 시간 모으기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FFFFFF; --bg-elev:#FFFFFF; --bg-sunk:#F4F4F4;
+  --ink:#2D2D2D; --ink-soft:#6B6B6B; --ink-faint:#9A9A9A;
+  --line:#E6E6E6; --line-strong:#CFCFCF;
+  --brand:#D04A02; --brand-ink:#B23F02; --brand-bg:#FDEBE0;
+  --gold:#FFB600; --gold-bg:#FFF4D6; --gold-ink:#7A5800;
+  --danger:#C62828; --danger-bg:#FDE4E4;
+  --ok:#2F9E5B;
+  --head:#D04A02; --on-head:#FFFFFF;
+  --radius:12px; --radius-sm:10px;
+  --shadow:0 2px 10px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.05);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#161616; --bg-elev:#1F1F1F; --bg-sunk:#2A2A2A;
+    --ink:#F2F2F2; --ink-soft:#B0B0B0; --ink-faint:#7A7A7A;
+    --line:#2F2F2F; --line-strong:#454545;
+    --brand:#E0601A; --brand-ink:#FF9A5C; --brand-bg:#3A1F0E;
+    --gold:#FFB600; --gold-bg:#3A2E0A; --gold-ink:#FFCD4D;
+    --danger:#E8716E; --danger-bg:#3A1E1E;
+    --head:#B23F02; --on-head:#FFFFFF;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#161616; --bg-elev:#1F1F1F; --bg-sunk:#2A2A2A;
+    --ink:#F2F2F2; --ink-soft:#B0B0B0; --ink-faint:#7A7A7A;
+    --line:#2F2F2F; --line-strong:#454545;
+    --brand:#E0601A; --brand-ink:#FF9A5C; --brand-bg:#3A1F0E;
+    --gold:#FFB600; --gold-bg:#3A2E0A; --gold-ink:#FFCD4D;
+    --danger:#E8716E; --danger-bg:#3A1E1E;
+    --head:#B23F02; --on-head:#FFFFFF;
+    color-scheme: dark;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:'Noto Sans KR',system-ui,-apple-system,'Malgun Gothic',sans-serif;
+  -webkit-font-smoothing:antialiased;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+.disp{font-family:'Noto Sans KR','Noto Sans KR',sans-serif;}
+#shell{max-width:560px; margin:0 auto; min-height:100%; position:relative; background:var(--bg); display:flex; flex-direction:column;}
+button{font-family:inherit;}
+input,select,textarea{font-family:inherit; font-size:15px;}
+a{color:inherit;}
+
+/* ---------- splash ---------- */
+#splash{position:fixed; inset:0; background:var(--brand); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999; gap:14px;}
+#splash .logo{font-size:52px; font-weight:700; color:#fff; opacity:0; animation:fadeUp 1.1s ease forwards;}
+#splash .tag{font-size:15px; color:#fff; opacity:0; letter-spacing:.02em; animation:fadeUp .8s ease forwards; animation-delay:1.1s;}
+@keyframes fadeUp{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
+@media (prefers-reduced-motion: reduce){
+  #splash .logo,#splash .tag{animation:none; opacity:1;}
+}
+
+/* ---------- header ---------- */
+.topbar{position:sticky; top:0; z-index:30; background:var(--bg); border-bottom:1px solid var(--line); padding:10px 16px; padding-top:calc(10px + env(safe-area-inset-top,0px)); display:flex; align-items:center; gap:10px;}
+.iconbtn{appearance:none; border:none; background:none; color:var(--ink); width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; flex-shrink:0;}
+.iconbtn:active{background:var(--bg-sunk);}
+.roomchip{display:flex; align-items:center; gap:6px; background:var(--bg-sunk); border:1px solid var(--line); border-radius:999px; padding:5px 10px 5px 12px; font-size:13px; color:var(--ink-soft); cursor:pointer;}
+.roomchip b{color:var(--ink); font-family:inherit; letter-spacing:.03em;}
+.topbar .title{flex:1; min-width:0; font-weight:700; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.star{font-size:20px; cursor:pointer; color:var(--ink-faint); background:none; border:none; padding:4px;}
+.star.on{color:var(--gold);}
+
+/* ---------- generic layout ---------- */
+.scr{flex:1; padding:20px 16px 90px; display:flex; flex-direction:column; gap:18px;}
+.hero{padding:28px 4px 6px;}
+.hero h1{font-size:26px; margin:0 0 6px; font-weight:900;}
+.hero p{margin:0; color:var(--ink-soft); font-size:14px; line-height:1.5;}
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:6px; border-radius:999px; padding:13px 20px; font-size:15px; font-weight:700; border:none; cursor:pointer; width:100%; text-align:center;}
+.btn-primary{background:var(--brand); color:#fff;}
+.btn-primary:active{filter:brightness(.92);}
+.btn-ghost{background:var(--bg-elev); color:var(--ink); border:1px solid var(--line-strong);}
+.btn-text{background:none; color:var(--brand-ink); padding:8px 4px; width:auto; font-weight:600; font-size:14px;}
+.btn-sm{padding:9px 14px; font-size:13px; width:auto;}
+.btn-danger{background:var(--danger); color:#fff;}
+.btn:disabled{opacity:.4; cursor:not-allowed;}
+.field{display:flex; flex-direction:column; gap:6px;}
+.field label{font-size:13px; font-weight:700; color:var(--ink-soft);}
+.field input[type=text],.field input[type=number],.field input[type=password],.field select{
+  border:1px solid var(--line-strong); background:var(--bg-elev); color:var(--ink); border-radius:var(--radius-sm); padding:11px 12px; font-size:15px; width:100%;
+}
+.field input:focus,.field select:focus{outline:2px solid var(--brand); outline-offset:1px;}
+.card{background:var(--bg-elev); border:1px solid var(--line); border-radius:var(--radius); padding:16px;}
+.row{display:flex; align-items:center; gap:8px;}
+.row.between{justify-content:space-between;}
+.muted{color:var(--ink-soft); font-size:13px;}
+.sectitle{font-size:13px; font-weight:700; color:var(--ink-soft); margin:0 0 2px; text-transform:none;}
+hr.sep{border:none; border-top:1px solid var(--line); margin:4px 0;}
+
+/* code input */
+.codeinput{letter-spacing:.3em; text-align:center; font-family:inherit; font-size:20px; font-weight:700;}
+.err{color:var(--danger); font-size:13px; margin-top:-8px;}
+
+/* collapsible lists */
+details.menu{background:var(--bg-elev); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;}
+details.menu summary{list-style:none; padding:13px 16px; font-weight:700; font-size:14px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;}
+details.menu summary::-webkit-details-marker{display:none;}
+details.menu summary::after{content:'▾'; color:var(--ink-faint); font-size:12px; transition:transform .15s;}
+details.menu[open] summary::after{transform:rotate(180deg);}
+.roomlist{padding:0 8px 8px;}
+.roomitem{display:flex; align-items:center; gap:8px; padding:9px 8px; border-radius:var(--radius-sm); cursor:pointer;}
+.roomitem:active{background:var(--bg-sunk);}
+.roomitem .nm{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px;}
+.roomitem .cd{font-family:inherit; font-size:12px; color:var(--ink-faint);}
+.empty-small{color:var(--ink-faint); font-size:13px; padding:14px 10px; text-align:center;}
+
+/* chips */
+.chiprow{display:flex; flex-wrap:wrap; gap:7px;}
+.chip{background:var(--bg-sunk); border:1px solid var(--line); border-radius:999px; padding:7px 12px; font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;}
+.chip.x button{background:none; border:none; color:var(--ink-faint); cursor:pointer; font-size:13px; padding:0;}
+.chip.pinned{background:var(--brand-bg); color:var(--brand-ink); border-color:transparent; font-weight:700;}
+.segrow{display:flex; gap:6px; flex-wrap:wrap;}
+.seg{border:1px solid var(--line-strong); background:var(--bg-elev); color:var(--ink); border-radius:999px; padding:9px 16px; font-size:14px; cursor:pointer;}
+.seg.on{background:var(--brand); border-color:var(--brand); color:#fff; font-weight:700;}
+
+/* calendar */
+.cal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+.cal-head b{font-size:14px;}
+.cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; text-align:center;}
+.cal-dow{font-size:11px; color:var(--ink-faint); padding:4px 0;}
+.cal-day{aspect-ratio:1; display:flex; align-items:center; justify-content:center; border-radius:var(--radius-sm); font-size:13px; cursor:pointer; background:var(--bg-sunk); color:var(--ink);}
+.cal-day.off{visibility:hidden;}
+.cal-day.past{color:var(--ink-faint); background:none; cursor:not-allowed;}
+.cal-day.sel{background:var(--brand); color:#fff; font-weight:700;}
+.cal-day.today{box-shadow:inset 0 0 0 1.5px var(--brand-ink);}
+
+/* progress */
+.progress{height:10px; border-radius:999px; background:var(--bg-sunk); overflow:hidden;}
+.progress b{display:block; height:100%; background:var(--brand); border-radius:999px; transition:width .3s;}
+.progress.full b{background:var(--gold);}
+
+/* banner */
+.banner-gold{background:var(--gold-bg); color:var(--gold-ink); border-radius:var(--radius); padding:14px 16px; font-size:14px; font-weight:700; line-height:1.5;}
+.banner-lock{background:var(--bg-sunk); color:var(--ink-soft); border-radius:var(--radius); padding:12px 16px; font-size:13px;}
+
+/* tabs */
+.tabs{position:sticky; bottom:0; z-index:25; display:flex; background:var(--bg-elev); border-top:1px solid var(--line); padding:6px 10px calc(6px + env(safe-area-inset-bottom,0px));}
+.tab{flex:1; border:none; background:none; color:var(--ink-faint); font-size:12px; padding:8px 2px; border-radius:var(--radius-sm); cursor:pointer; font-weight:700; display:flex; flex-direction:column; align-items:center; gap:3px;}
+.tab .ic{font-size:18px;}
+.tab.on{color:var(--brand-ink);}
+
+/* grid (time input / heatmap) */
+.gridwrap{overflow:auto; border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-elev); max-height:58vh; position:relative;}
+table.timetable{border-collapse:collapse; width:100%;}
+table.timetable th,table.timetable td{border:1px solid var(--line); padding:0;}
+table.timetable thead th{position:sticky; top:0; background:var(--bg-elev); z-index:3; font-size:11px; font-weight:700; padding:8px 2px; color:var(--ink-soft); white-space:nowrap;}
+table.timetable th.timecol-h{left:0; z-index:4; position:sticky;}
+table.timetable td.timecol{position:sticky; left:0; background:var(--bg-elev); z-index:2; font-size:11px; color:var(--ink-faint); text-align:right; padding:0 6px; white-space:nowrap; font-family:inherit;}
+.cell{width:100%; min-width:40px; height:26px; box-sizing:border-box; cursor:pointer; background:var(--bg-sunk); display:flex; align-items:center; justify-content:center;}
+.cell.on{background:var(--brand);}
+.cell.gold{background:var(--gold) !important;}
+.cell.hl{box-shadow:inset 0 0 0 2px var(--brand-ink);}
+/* 이미 확정된 내 다른 회의 시간: 회색 빗금(표시만 하고 선택은 그대로 가능) */
+.cell.busy{position:relative; overflow:hidden; background-image:repeating-linear-gradient(135deg, var(--line-strong) 0 2px, transparent 2px 6px);}
+.cell.busy.on{background-image:repeating-linear-gradient(135deg, rgba(255,255,255,.45) 0 2px, transparent 2px 6px);}
+.busy-lbl{position:absolute; left:2px; right:2px; top:50%; transform:translateY(-50%); font-size:9px; line-height:1.1; font-weight:700; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; text-align:left;}
+.cell.busy.on .busy-lbl{color:#fff;}
+.busy-legend{display:inline-block; width:14px; height:10px; border-radius:2px; vertical-align:-1px; margin-right:4px; background:var(--bg-sunk) repeating-linear-gradient(135deg, var(--line-strong) 0 2px, transparent 2px 6px);}
+.heat-count{font-size:9px; color:var(--ink-soft); text-align:center; line-height:1.3;}
+.tl-axis{display:flex; justify-content:space-between; font-size:11px; color:var(--ink-faint); padding:0 2px 6px 74px; font-weight:600;}
+.tl-row{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+.tl-row:last-child{margin-bottom:0;}
+.tl-label{width:64px; flex-shrink:0; font-size:12.5px; font-weight:700; color:var(--ink-soft);}
+.tl-bar{flex:1; display:flex; height:32px; border-radius:7px; overflow:hidden; background:var(--bg-sunk);}
+.tl-seg{display:flex; align-items:center; justify-content:center; cursor:pointer; border-right:1.5px solid var(--bg-elev); min-width:2px;}
+.tl-seg:last-child{border-right:none;}
+.tl-seg.heated .heat-count{color:#fff; font-weight:700; font-size:11px;}
+.tl-seg.gold .heat-count{color:var(--gold-ink); font-weight:900; font-size:11px;}
+.cell.gold .heat-count{color:var(--gold-ink); font-weight:700;}
+.cell.heated .heat-count{color:#fff; font-weight:700;}
+
+/* rank cards */
+.rankcard{display:flex; gap:14px; padding:14px; border-radius:var(--radius); background:var(--bg-elev); border:1px solid var(--line); cursor:pointer; align-items:center;}
+.rankcard.r1{border-left:4px solid var(--gold);}
+.rankcard.r2{border-left:4px solid var(--line-strong);}
+.rankcard.r3{border-left:4px solid var(--line-strong);}
+.rankcard .num{font-family:inherit; font-size:26px; font-weight:700; color:var(--ink-faint); width:30px; text-align:center; flex-shrink:0;}
+.rankcard.r1 .num{color:var(--gold-ink);}
+.rankcard .mid{flex:1; min-width:0;}
+.rankcard .range{font-weight:700; font-size:15px;}
+.rankcard .cond{font-size:12.5px; color:var(--ink-soft); margin-top:3px;}
+
+/* modal */
+.overlay{position:fixed; inset:0; background:rgba(20,18,15,.45); z-index:200; display:flex; align-items:flex-end; justify-content:center;}
+.sheet{background:var(--bg-elev); width:100%; max-width:560px; border-radius:20px 20px 0 0; padding:20px 18px calc(20px + env(safe-area-inset-bottom,0px)); max-height:85vh; overflow:auto; display:flex; flex-direction:column; gap:14px;}
+.sheet h3{margin:0; font-size:17px;}
+.toast{position:fixed; left:50%; bottom:90px; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:10px 18px; border-radius:999px; font-size:13px; z-index:400; opacity:0; transition:opacity .2s; pointer-events:none;}
+.toast.show{opacity:1;}
+#confetti-canvas{position:fixed; inset:0; pointer-events:none; z-index:500;}
+.namepanel .grp{margin-bottom:10px;}
+.namepanel .grp b{font-size:12px; color:var(--ink-soft); display:block; margin-bottom:5px;}
+.namepanel .nm{font-size:14px; padding:3px 0;}
+::placeholder{color:var(--ink-faint);}
+.stepper{display:flex; align-items:center; gap:10px;}
+.stepper button{width:34px; height:34px; border-radius:50%; border:1px solid var(--line-strong); background:var(--bg-elev); font-size:18px; cursor:pointer;}
+.stepper b{min-width:32px; text-align:center; font-family:inherit; font-size:16px;}
+.savemode{font-size:11px; color:var(--ink-faint); text-align:center;}
+
+/* ===== PwC 리디자인 오버라이드 ===== */
+.topbar,.appbar{background:var(--head); color:var(--on-head); border-bottom:none;}
+.topbar{padding:10px 12px 10px 6px; padding-top:calc(10px + env(safe-area-inset-top,0px)); gap:4px;}
+.topbar .iconbtn{color:var(--on-head); width:40px; height:40px;}
+.topbar .iconbtn:active{background:rgba(255,255,255,.18);}
+.topbar .title{color:var(--on-head); font-weight:900; font-size:18px;}
+.topbar .star{color:rgba(255,255,255,.75);}
+.topbar .star.on{color:var(--gold);}
+.topbar .roomchip{background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.4); color:var(--on-head); padding:5px 10px;}
+.topbar .roomchip b{color:var(--on-head);}
+.topbar .modeic{display:flex; align-items:center; color:rgba(255,255,255,.85);}
+.appbar{position:sticky; top:0; z-index:30; padding:18px 16px 16px; padding-top:calc(18px + env(safe-area-inset-top,0px)); display:flex; align-items:center; justify-content:space-between; gap:10px;}
+.appbar .brand{font-size:20px; font-weight:900; letter-spacing:-.01em;}
+.appbar .sub{font-size:12.5px; font-weight:500;}
+.ico{display:inline-flex; align-items:center; justify-content:center;}
+.ico svg{display:block;}
+.btn{border-radius:10px; padding:15px 20px; font-size:16px;}
+.btn-sm{border-radius:999px; padding:9px 14px; font-size:13px;}
+.btn-ghost{background:var(--bg-elev); color:var(--brand-ink); border:1.5px solid var(--brand);}
+.btn-gold{background:var(--gold); color:#2D2D2D; font-weight:900;}
+.field input[type=text],.field input[type=number],.field input[type=password],.field select,.field textarea,.scr select,.scr input[type=date],.scr input[type=text]{
+  background:var(--bg-sunk); border:1px solid var(--line); border-radius:10px;}
+.scr select,.scr input[type=date]{padding:11px 12px; color:var(--ink); font-size:15px;}
+.codeinput{background:var(--bg-elev) !important;}
+.card{border-radius:12px;}
+details.menu{background:var(--bg-sunk); border:none;}
+.chip{background:var(--bg-elev); border:1.5px solid var(--brand); color:var(--brand-ink); font-weight:700; padding:6px 12px;}
+.chip.pinned,.chip.x{background:var(--brand); border-color:var(--brand); color:#fff;}
+.chip.x button{color:#fff;}
+.seg{border:1.5px solid var(--line-strong); color:var(--ink-soft);}
+.seg.on{background:var(--brand); border-color:var(--brand); color:#fff;}
+.cal-day{border-radius:10px;}
+.banner-gold{border:1.5px solid var(--gold); color:var(--ink);}
+.tabs{padding-top:4px;}
+.tab{color:var(--ink-faint);}
+.tab.on{color:var(--brand);}
+.tab .ic{height:22px;}
+table.timetable{border-collapse:separate; border-spacing:3px;}
+table.timetable th,table.timetable td{border:none;}
+.cell{border-radius:5px; height:24px;}
+.gridwrap{border:1px solid var(--line); padding:4px;}
+.rankcard{flex-direction:column; align-items:stretch; gap:4px; border:1.5px solid var(--line); padding:12px 14px;}
+.rankcard.r1{background:var(--gold-bg); border-color:var(--gold); border-left-width:1.5px;}
+.rankcard.r2,.rankcard.r3{border-left-width:1.5px; border-left-color:var(--line);}
+.rankcard.selected{box-shadow:0 0 0 2px var(--brand);}
+.refcard.selected{box-shadow:0 0 0 2px var(--brand); border-style:solid !important; border-color:var(--brand) !important;}
+.statrow{display:flex; gap:8px;}
+.statblock{flex:1; text-align:center; padding:10px 4px; border-radius:10px; background:var(--bg-sunk);}
+.statblock .statnum{font-size:20px; font-weight:900; line-height:1.1;}
+.statblock .statlbl{font-size:11px; color:var(--ink-soft); margin-top:3px; font-weight:700;}
+.statblock.ok{background:var(--gold-bg);} .statblock.ok .statnum{color:var(--gold-ink);}
+.statblock.bad{background:var(--danger-bg);} .statblock.bad .statnum{color:var(--danger);}
+.statblock.pend{background:var(--bg-sunk);} .statblock.pend .statnum{color:var(--ink-faint);}
+/* 설정 수정의 참가자 토글: 기본은 귀여운 주황, 필수인원으로 켜면 노란색 */
+.chip.reqToggle{background:var(--brand-bg); border:1.5px solid var(--brand); color:var(--brand-ink); font-weight:700; border-radius:999px; cursor:pointer;}
+.chip.reqToggle.on{background:var(--gold); border-color:var(--gold); color:#2D2D2D;}
+.chip.reqToggle:disabled{opacity:.85; cursor:default;}
+.wk-headrow{display:flex;}
+.wk-hourcol{width:34px; flex-shrink:0; position:relative;}
+.wk-headdays{flex:1; display:flex;}
+.wk-headcell{flex:1; text-align:center; font-size:11px; font-weight:700; color:var(--ink-soft); padding-bottom:6px;}
+.wk-headcell.today{font-weight:900;}
+.wk-headdate{display:block; font-size:13px; margin-top:1px;}
+.wk-wrap{position:relative; display:flex; border-top:1px solid var(--line);}
+.wk-hourlbl{position:absolute; transform:translateY(-50%); font-size:9.5px; color:var(--ink-faint); right:4px;}
+.wk-days{flex:1; display:flex; position:relative;}
+.wk-day{flex:1; position:relative; border-right:1px solid var(--line); border-left:1px solid var(--line); margin-left:-1px;}
+.wk-day.today{background:var(--brand-bg);}
+.wk-block{position:absolute; left:2px; right:2px; border-radius:5px; padding:3px 4px; overflow:hidden; cursor:default; box-shadow:0 1px 2px rgba(0,0,0,.15);}
+.wk-block-name{font-size:9.5px; color:#fff; font-weight:800; line-height:1.25; word-break:keep-all;}
+.rankcard .range{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.rbadge{font-size:12px; font-weight:900; padding:2px 9px; border-radius:999px; background:var(--brand); color:#fff;}
+.rankcard.r1 .rbadge{background:var(--gold); color:#2D2D2D;}
+.rankcard.r3 .rbadge{background:#6B6B6B; color:#fff;}
+.rtag{font-size:11px; font-weight:700; color:var(--brand-ink); background:var(--brand-bg); padding:1px 7px; border-radius:999px;}
+.statchip{display:inline-flex; align-items:center; gap:5px; padding:6px 12px 6px 13px; border-radius:999px; font-size:13px; font-weight:700; line-height:1;}
+.statchip svg{display:inline-block; vertical-align:-2px;}
+.statchip.done{background:var(--gold); color:#2D2D2D;}
+.statchip.pending{background:transparent; color:var(--ink-soft); border:1.5px dashed var(--line-strong); font-weight:600;}
+.statsummary{font-size:13px; color:var(--ink-soft); margin:-2px 0 8px; font-weight:600;}
+.rankcard .cond{color:var(--ink-soft);}
+.progress.full b{background:var(--gold);}
+.sheet{border-radius:16px 16px 0 0;}
+.btn-text{border:none;}
+.scr input[type=text]{padding:11px 12px; font-size:15px; color:var(--ink); min-width:0;}
+.topbar .iconbtn{width:36px;}
+.donebig{width:64px; height:64px; border-radius:50%; background:var(--brand-bg); color:var(--brand); display:flex; align-items:center; justify-content:center;}
+</style>
+</head>
+<body>
+<div id="confetti-canvas"></div>
+<div id="splash"><div class="logo disp">CIMO</div><div class="tag">회의 시간 모으기</div></div>
+<div id="shell"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+'use strict';
+/* ============================= 유틸 ============================= */
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),1800);}
+function uid(){return Math.random().toString(36).slice(2,9);}
+async function sha256Hex(str){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function pad(n){return String(n).padStart(2,'0');}
+function toISODate(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function todayISO(){return toISODate(new Date());}
+function addDaysISO(iso,n){const d=new Date(iso+'T00:00:00');d.setDate(d.getDate()+n);return toISODate(d);}
+const DOW=['일','월','화','수','목','금','토'];
+function dateLabel(iso,withYear){const d=new Date(iso+'T00:00:00');return (withYear?(d.getFullYear()+'년 '):'')+(d.getMonth()+1)+'월 '+d.getDate()+'일('+DOW[d.getDay()]+')';}
+function minToHHMM(m){return pad(Math.floor(m/60)%24)+':'+pad(m%60);}
+function cmpDate(a,b){return a<b?-1:a>b?1:0;}
+async function copyText(text){
+  try{await navigator.clipboard.writeText(text);toast('복사했어요 📋');return;}catch(e){}
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.focus();ta.select();
+    document.execCommand('copy');document.body.removeChild(ta);
+    toast('복사했어요 📋');
+  }catch(e2){
+    window.prompt('복사에 실패했어요. 아래 내용을 직접 선택해 복사해주세요.',text);
+  }
+}
+function reduceMotion(){try{return matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){return false;}}
+/* Claude 아티팩트는 about:srcdoc 샌드박스 안에서 실행돼서, 주소창 URL과 문서의 실제 origin이
+   달라 history.replaceState가 SecurityError를 던져요(방 열기가 거기서 조용히 멈추던 원인).
+   그래서 주소창 동기화는 "되면 좋은 것"으로만 다루고, 실패해도 절대 앱 흐름을 막지 않아요. */
+function safeReplaceHash(hash){
+  try{ history.replaceState(null,'',hash); }
+  catch(e){ /* 샌드박스 환경 등에서는 조용히 무시 — 주소창 동기화만 못 할 뿐, 앱 동작엔 지장 없어요 */ }
+}
+/* Claude 아티팩트로 열람 중일 때는 location.href가 실제 공개 주소(https://claude.ai/artifact/...)와
+   다를 수 있어서(샌드박스 iframe 주소를 가리킴), 링크 생성은 항상 이 함수를 통해서만 해요.
+   Vercel 등 자체 배포 시에는 window.claude가 없으니 location.href를 그대로 써요. */
+const DEPLOY_URL = (typeof window.claude!=='undefined' && window.claude) ? 'https://claude.ai/artifact/D1jgYqfhjZzadF9QxJvG5s' : null;
+function baseUrl(){ return DEPLOY_URL || location.href.split('#')[0]; }
+
+/* ============================= 아이콘(선 아이콘 SVG) ============================= */
+const _sv=(d,sz)=>`<svg width="${sz||20}" height="${sz||20}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const IC={
+  list:sz=>_sv('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h3"/>',sz),
+  cal:sz=>_sv('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',sz),
+  week:sz=>_sv('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8.5 9v11M13.5 9v11"/>',sz),
+  user:sz=>_sv('<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',sz),
+  pen:sz=>_sv('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>',sz),
+  trophy:sz=>_sv('<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8"/>',sz),
+  users:sz=>_sv('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-5.5 6.5-5.5s6.5 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .7 3.5 2.4 3.5 5.2"/>',sz),
+  back:sz=>_sv('<path d="M15 5l-7 7 7 7"/>',sz),
+  copy:sz=>_sv('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',sz),
+  moon:sz=>_sv('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',sz),
+  sun:sz=>_sv('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',sz),
+  gear:sz=>_sv('<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',sz),
+  link:sz=>_sv('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',sz),
+  device:sz=>_sv('<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M11 18h2"/>',sz),
+  flask:sz=>_sv('<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/><path d="M7.5 14h9"/>',sz),
+  check:sz=>_sv('<path d="M5 12.5l4.5 4.5L19 7.5"/>',sz),
+  arrow:sz=>_sv('<path d="M5 12h14M13 6l6 6-6 6"/>',sz)
+};
+function icoTab(fn){return `<span class="ic ico">${fn(20)}</span>`;}
+
+/* ============================= 로컬 저장소 ============================= */
+const LS={
+  get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+};
+function getTheme(){return LS.get('cimo:theme','system');}
+function setTheme(t){LS.set('cimo:theme',t);applyTheme();}
+function applyTheme(){document.documentElement.setAttribute('data-theme',getTheme()==='system'?'':getTheme());}
+function getFavorites(){return LS.get('cimo:favorites',[]);}
+function getRecents(){return LS.get('cimo:recents',[]);}
+function isFav(code){return getFavorites().some(r=>r.code===code);}
+function toggleFav(code,name){
+  let f=getFavorites();
+  if(f.some(r=>r.code===code)){f=f.filter(r=>r.code!==code);LS.set('cimo:favorites',f);toast('즐겨찾기에서 제거했어요');}
+  else{
+    if(f.length>=20){toast('즐겨찾기는 최대 20개까지 가능해요');return;}
+    f.unshift({code,name});LS.set('cimo:favorites',f);toast('즐겨찾기에 추가했어요 ☆');
+  }
+}
+/* 내 목록에서 나가기: 즐겨찾기·최근 방 목록에서만 지워요.
+   방 자체와 내가 입력한 시간은 그대로 남고, 코드나 링크로 다시 들어오면 목록에 다시 생겨요. */
+function leaveRoomList(code){
+  LS.set('cimo:favorites',getFavorites().filter(r=>r.code!==code));
+  LS.set('cimo:recents',getRecents().filter(r=>r.code!==code));
+}
+function removeFav(code){LS.set('cimo:favorites',getFavorites().filter(r=>r.code!==code));render();}
+function removeRecent(code){LS.set('cimo:recents',getRecents().filter(r=>r.code!==code));render();}
+function pushRecent(code,name){
+  let r=getRecents().filter(x=>x.code!==code);
+  r.unshift({code,name,ts:Date.now()});
+  if(r.length>10)r=r.slice(0,10);
+  LS.set('cimo:recents',r);
+  // 즐겨찾기 이름도 최신화
+  let f=getFavorites();const i=f.findIndex(x=>x.code===code);
+  if(i>-1){f[i].name=name;LS.set('cimo:favorites',f);}
+}
+function getIdentity(code){return LS.get('cimo:id:'+code,null);}
+function setIdentity(code,name,title){LS.set('cimo:id:'+code,{name,title});}
+/* 내 정보에 등록해두는 전역 프로필 — 설정해두면 어느 방에 들어가든 이름·직급을 다시 입력하지 않아도 돼요 */
+function getMyProfile(){return LS.get('cimo:myProfile',null);}
+function setMyProfile(name,dept,rank){LS.set('cimo:myProfile',{name:(name||'').trim(),dept,rank});}
+function clearMyProfile(){LS.set('cimo:myProfile',null);}
+function profileTitle(gp){if(!gp||!gp.rank)return '';return gp.dept?(gp.dept+' · '+gp.rank):gp.rank;}
+const DEPTS=['CM','TMT','IME','FS'];
+const RANKS=['주니어','시니어','매니저','디렉터'];
+let PD=null; // 내 정보 탭에서 저장 전 임시로 들고 있는 입력값
+let profileEditMode=false; // true면 수정 폼, false면 저장된 프로필 카드
+function initProfileDraft(){
+  const gp=getMyProfile();
+  PD = gp? {name:gp.name||'',dept:gp.dept||null,rank:gp.rank||null} : {name:'',dept:null,rank:null};
+  /* 목록에 없는 부서로 저장돼 있으면 '직접 입력' 상태로 열어요 */
+  PD.deptCustom = !!(PD.dept && DEPTS.indexOf(PD.dept)<0);
+  PD.deptText = PD.deptCustom ? PD.dept : '';
+}
+/* '직접 입력' 칸에 적던 글자가 다시 그릴 때 사라지지 않게 미리 옮겨둬요 */
+function syncDeptText(){
+  const el=$('#p_dept_custom'); if(el&&PD)PD.deptText=el.value;
+  const nm=$('#p_name'); if(nm&&PD)PD.name=nm.value;
+}
+function profileAvatar(name,size){
+  size=size||64;
+  const ch=((name||'').trim().charAt(0)||'?').toUpperCase();
+  return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:var(--brand-bg);color:var(--brand-ink);display:flex;align-items:center;justify-content:center;font-size:${Math.round(size*0.42)}px;font-weight:800;flex-shrink:0;">${esc(ch)}</div>`;
+}
+function getConfetti(code){return LS.get('cimo:confetti:'+code,{});}
+function setConfettiFlag(code,key){const c=getConfetti(code);c[key]=true;LS.set('cimo:confetti:'+code,c);}
+
+/* ---- 방 데이터 저장소 (공유 DB: Supabase → Claude DB → localStorage) ---- */
+/* 공동 데이터(room/participants)는 Supabase가 설정되어 있으면 공유 저장소에 저장하고,
+   개인 데이터(프로필/테마/즐겨찾기/최근 방)는 기존 localStorage를 그대로 사용해요.
+   예시 방(202610)은 항상 로컬에만 둬서 데모가 동일하게 보이게 해요. */
+const SUPABASE_CONFIG={
+  url:'https://ycvthrkyfvyctszvurnc.supabase.co',
+  anonKey:'sb_publishable_Irfb-2enChRd_RLUh9j6Gg_GcNE4o_X'
+};
+let sb=null, dbNS=null, capsReady=false;
+let saveMode='local'; // 'shared' | 'local'
+
+async function loadSupabaseJS(){
+  if(window.supabase&&window.supabase.createClient)return;
+  await new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
+    s.onload=resolve;
+    s.onerror=()=>reject(new Error('supabase-js load failed'));
+    document.head.appendChild(s);
+  });
+}
+
+async function initCaps(){
+  // 1) Vercel/일반 브라우저: Supabase 공유 DB 우선
+  try{
+    if(SUPABASE_CONFIG.url&&SUPABASE_CONFIG.anonKey){
+      await loadSupabaseJS();
+      sb=window.supabase.createClient(SUPABASE_CONFIG.url,SUPABASE_CONFIG.anonKey,{
+        auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}
+      });
+      const {error}=await sb.from('rooms').select('code').limit(1);
+      if(error)throw error;
+      saveMode='shared';
+      capsReady=true;
+      return;
+    }
+  }catch(e){ sb=null; }
+
+  // 2) Claude Artifact: 기존 Claude 공유 DB 유지
+  try{
+    const use=window.claude && window.claude.use;
+    if(use) dbNS=await use('db');
+  }catch(e){ dbNS=null; }
+  capsReady=true;
+  saveMode = dbNS ? 'shared' : 'local';
+}
+
+const Store={
+  async getRoom(code){
+    if(sb && code!=='202610'){
+      try{
+        const {data,error}=await sb.from('rooms').select('data').eq('code',code).maybeSingle();
+        if(error)throw error;
+        return data?data.data:null;
+      }catch(e){ /* 아래 기존 저장소로 대체 */ }
+    }
+    if(dbNS && code!=='202610'){
+      try{ const snap=await dbNS.doc('rooms/'+code).get(); return snap.exists? snap.data(): null; }
+      catch(e){ /* 공유 저장 읽기 실패 → 로컬로 대체 */ }
+    }
+    return LS.get('cimo:room:'+code,null);
+  },
+  async setRoom(code,data){
+    if(sb && code!=='202610'){
+      try{
+        const {error}=await sb.from('rooms').upsert({code,data,updated_at:new Date().toISOString()},{onConflict:'code'});
+        if(error)throw error;
+        saveMode='shared';
+        window.dispatchEvent(new Event('cimo:change:'+code));
+        return;
+      }catch(e){ saveMode='local'; }
+    }
+    if(dbNS && code!=='202610'){
+      try{ await dbNS.doc('rooms/'+code).set(data); saveMode='shared'; window.dispatchEvent(new Event('cimo:change:'+code)); return; }
+      catch(e){ saveMode='local'; toast('저장 권한이 없어 이 기기에만 저장돼요'); }
+    }
+    LS.set('cimo:room:'+code,data);
+    window.dispatchEvent(new Event('cimo:change:'+code));
+  },
+  async getPeople(code){
+    if(sb && code!=='202610'){
+      try{
+        const {data,error}=await sb.from('participants').select('data').eq('room_code',code);
+        if(error)throw error;
+        return (data||[]).map(r=>r.data);
+      }catch(e){}
+    }
+    if(dbNS && code!=='202610'){
+      try{ const qs=await dbNS.collection('rooms/'+code+'/people').get(); return qs.docs.map(d=>d.data()); }
+      catch(e){}
+    }
+    return LS.get('cimo:people:'+code,[]);
+  },
+  async setPerson(code,person){
+    if(sb && code!=='202610'){
+      try{
+        const {error}=await sb.from('participants').upsert({
+          room_code:code,person_id:person.id,data:person,updated_at:new Date().toISOString()
+        },{onConflict:'room_code,person_id'});
+        if(error)throw error;
+        saveMode='shared';
+        window.dispatchEvent(new Event('cimo:change:'+code));
+        return;
+      }catch(e){ saveMode='local'; }
+    }
+    if(dbNS && code!=='202610'){
+      try{ await dbNS.collection('rooms/'+code+'/people').doc(person.id).set(person); saveMode='shared'; window.dispatchEvent(new Event('cimo:change:'+code)); return; }
+      catch(e){ saveMode='local'; toast('저장 권한이 없어 이 기기에만 저장돼요'); }
+    }
+    let ps=LS.get('cimo:people:'+code,[]);
+    const i=ps.findIndex(p=>p.id===person.id);
+    if(i>-1)ps[i]=person;else ps.push(person);
+    LS.set('cimo:people:'+code,ps);
+    window.dispatchEvent(new Event('cimo:change:'+code));
+  },
+  watch(code,cb){
+    if(sb && code!=='202610'){
+      try{
+        const ch=sb.channel('cimo-room-'+code+'-'+Math.random().toString(36).slice(2))
+          .on('postgres_changes',{event:'*',schema:'public',table:'rooms',filter:'code=eq.'+code},()=>cb())
+          .on('postgres_changes',{event:'*',schema:'public',table:'participants',filter:'room_code=eq.'+code},()=>cb())
+          .subscribe();
+        return ()=>{ try{sb.removeChannel(ch);}catch(e){} };
+      }catch(e){}
+    }
+    if(dbNS && code!=='202610'){
+      try{
+        const u1=dbNS.doc('rooms/'+code).onSnapshot(()=>cb(),()=>{});
+        const u2=dbNS.collection('rooms/'+code+'/people').onSnapshot(()=>cb(),()=>{});
+        return ()=>{u1();u2();};
+      }catch(e){}
+    }
+    const h=()=>cb();
+    window.addEventListener('cimo:change:'+code,h);
+    window.addEventListener('storage',h);
+    return ()=>{window.removeEventListener('cimo:change:'+code,h);window.removeEventListener('storage',h);};
+  }
+};
+function personKey(name,title){return (name||'').trim()+'|'+(title||'').trim();}
+
+/* ============================= 예시 방 시드 ============================= */
+async function seedDemo(){
+  const code='202610';
+  if(await Store.getRoom(code))return;
+  const d0=todayISO();
+  const dates=[addDaysISO(d0,1),addDaysISO(d0,2),addDaysISO(d0,3)];
+  const pwHash=await sha256Hex('0000');
+  const room={
+    code,name:'10월 정기 회의 (예시 방)',details:'이용 방법을 보여드리는 예시 방이에요. 자유롭게 눌러보세요.',
+    dates,timeStart:540,timeEnd:1080,unit:30,durationMin:120,
+    deadline:{mode:'manual',value:addDaysISO(d0,7)+'T00:00'},
+    manager:{name:'김회시',title:'팀장'},totalCount:5,
+    required:[{type:'name',name:'김회시',title:'팀장'},{type:'name',name:'이모음',title:'대리'}],
+    pwHash,confirmed:null,createdAt:Date.now()
+  };
+  await Store.setRoom(code,room);
+  const cellsPerDay=(room.timeEnd-room.timeStart)/room.unit; // 18
+  function bits(avail){const a=new Array(dates.length*cellsPerDay).fill('0');avail.forEach(i=>a[i]='1');return a.join('');}
+  // 날짜0=내일,1=모레,2=글피 / 2시간 소요=4칸
+  const people=[
+    {id:personKey('김회시','팀장'),name:'김회시',title:'팀장',cells:bits([...range(2,2+4),...range(cellsPerDay+0,cellsPerDay+4)])},
+    {id:personKey('이모음','대리'),name:'이모음',title:'대리',cells:bits([...range(2,2+4),...range(cellsPerDay+4,cellsPerDay+8)])},
+    {id:personKey('박참석','사원'),name:'박참석',title:'사원',cells:bits([...range(2,2+4)])},
+    {id:personKey('최가능','사원'),name:'최가능',title:'사원',cells:bits([...range(2,2+4),...range(2*cellsPerDay+6,2*cellsPerDay+10)])},
+    {id:personKey('정시간','주임'),name:'정시간',title:'주임',cells:bits([...range(2,2+4)])}
+  ];
+  for(const p of people)await Store.setPerson(code,p);
+  function range(a,b){const r=[];for(let i=a;i<b;i++)r.push(i);return r;}
+}
+
+/* ============================= 핵심 로직 ============================= */
+function cellsPerDayOf(room){return Math.round((room.timeEnd-room.timeStart)/room.unit);}
+function windowLenOf(room){return Math.max(1,Math.ceil(room.durationMin/room.unit));}
+function cellLabel(room,dayIdx,slotIdx){return minToHHMM(room.timeStart+slotIdx*room.unit);}
+
+function splitTitle(title){
+  const s=String(title||'').trim();
+  const parts=s.split(/\s*·\s*/).filter(Boolean);
+  return {dept:parts.length>1?parts.slice(0,-1).join(' · '):'',rank:(parts[parts.length-1]||'').trim()};
+}
+function rankOf(x){
+  if(!x)return '';
+  if(typeof x==='string')return splitTitle(x).rank;
+  if(x.rank)return String(x.rank).trim();
+  return splitTitle(x.title||'').rank;
+}
+/* 이름으로 지정한 필참자와 참여자를 비교할 때는 이름 + 직급(랭크)으로 봐요.
+   참여자 직급에 부서가 붙어 있어도("FS · 시니어") 같은 사람으로 인식해요. */
+function reqMatch(req,p){return !!req && req.type==='name' && !!p && p.name===req.name && rankOf(p)===rankOf(req.title);}
+function reqJoined(req,people){return people.some(p=>reqMatch(req,p));}
+function isReqPerson(room,p){return room.required.some(r=>reqMatch(r,p));}
+function reqSatisfiedForWindow(room,people,idxs){
+  let satisfied=0;
+  for(const req of room.required){
+    if(req.type==='name'){
+      const p=people.find(p=>reqMatch(req,p));
+      if(p&&idxs.every(i=>p.cells[i]==='1'))satisfied++;
+    }else{
+      const ok=people.some(p=>rankOf(p)===rankOf(req.title)&&idxs.every(i=>p.cells[i]==='1'));
+      if(ok)satisfied++;
+    }
+  }
+  return satisfied;
+}
+function attendeesForIdxs(people,idxs){
+  return people.filter(p=>idxs.every(i=>p.cells[i]==='1'));
+}
+function attendeeNamesText(room,people,idxs){
+  const atts=attendeesForIdxs(people,idxs);
+  if(!atts.length)return '없음';
+  return atts.map(p=>(isReqPerson(room,p)?'★':'')+p.name).join(', ');
+}
+/* 순위 카드를 눌렀을 때 그 시간 기준으로 가능/불가능/투표미참여를 다시 계산해요. */
+function windowBreakdown(room,people,idxs){
+  const mark=p=>(isReqPerson(room,p)?'★':'')+p.name;
+  const avail=people.filter(p=>idxs.every(i=>p.cells[i]==='1'));
+  const unavail=people.filter(p=>!idxs.every(i=>p.cells[i]==='1'));
+  const notVoted=Math.max(0,room.totalCount-people.length);
+  return {
+    avail,unavail,notVoted,
+    availText: avail.length?avail.map(mark).join(', '):'없음',
+    unavailText: unavail.length?unavail.map(mark).join(', '):'없음'
+  };
+}
+/* 최소 참석 인원: 방장이 정하지 않으면 과반(5명 → 3명) */
+function majorityOf(n){return Math.max(1,Math.floor((n||1)/2)+1);}
+function minAttendOf(room){
+  const n=room.totalCount||1;
+  const m=(room.minCount==null||room.minCount==='')?majorityOf(n):+room.minCount;
+  return Math.min(n,Math.max(1,m));
+}
+/* 이 구간에 못 오는 필참자 이름 목록 */
+function missingReqs(room,people,idxs){
+  const out=[];
+  for(const req of room.required){
+    if(req.type==='name'){
+      const p=people.find(p=>reqMatch(req,p));
+      if(!p||!idxs.every(i=>p.cells[i]==='1'))out.push(req.name);
+    }else{
+      const ok=people.some(p=>rankOf(p)===rankOf(req.title)&&idxs.every(i=>p.cells[i]==='1'));
+      if(!ok)out.push(rankOf(req.title)+' 직급');
+    }
+  }
+  return out;
+}
+function computeTop3(room,people){
+  const cpd=cellsPerDayOf(room),wl=windowLenOf(room);
+  const out=[];
+  room.dates.forEach((date,dIdx)=>{
+    for(let s=0;s+wl<=cpd;s++){
+      if(room.timeStart+(s+wl)*room.unit>room.timeEnd)break;
+      const idxs=[];for(let k=0;k<wl;k++)idxs.push(dIdx*cpd+s+k);
+      const req=reqSatisfiedForWindow(room,people,idxs);
+      const totalAvail=people.filter(p=>idxs.every(i=>p.cells[i]==='1')).length;
+      out.push({date,dIdx,start:room.timeStart+s*room.unit,end:room.timeStart+(s+wl)*room.unit,req,totalAvail,idxs});
+    }
+  });
+  const reqCount=room.required.length;
+  const minCount=minAttendOf(room);
+  /* 순위 규칙
+     1순위: 필참자 전원 + 총 인원 전원 / 2순위: 필참자 전원 + 나머지 일부
+     3순위: 필참자 일부(1명 이상, 필참자가 2명 이상인 방만)
+     필참자가 아무도 없는 시간과 최소 참석 인원 미만인 시간은 추천에서 빼요. */
+  for(const w of out){
+    if(!reqCount)w.tier=0;
+    else if(w.req===reqCount)w.tier=(w.totalAvail>=room.totalCount)?1:2;
+    else if(w.req>=1&&reqCount>=2)w.tier=3;
+    else w.tier=9;
+    w.eligible = w.tier!==9 && w.totalAvail>0 && w.totalAvail>=minCount;
+  }
+  out.sort((a,b)=> a.tier-b.tier || b.totalAvail-a.totalAvail || cmpDate(a.date,b.date) || a.start-b.start);
+  const elig=out.filter(w=>w.eligible);
+  const top=[];
+  for(const w of elig){
+    if(top.length>=3)break;
+    if(top.some(t=>t.date===w.date&&t.start===w.start))continue;
+    top.push(w);
+  }
+  /* 등급·인원수가 같아도 공동 순위로 묶지 않고, 이미 정렬된 순서(날짜 빠른 순 → 시간 빠른 순)
+     그대로 1위부터 차례로 번호를 매겨요. */
+  elig.forEach((w,i)=>{ w.rank=i+1; });
+  /* 참고 카드: 순위 규칙(필참자 등)엔 못 미치지만, 그 어떤 추천보다 더 많이 모이는 시간.
+     방장이 "그래도 이 시간이 낫지 않을까" 판단할 근거만 참고로 보여줘요. */
+  const byCount=out.slice().sort((a,b)=> b.totalAvail-a.totalAvail || b.req-a.req || cmpDate(a.date,b.date) || a.start-b.start);
+  const topMax=top.reduce((m,w)=>Math.max(m,w.totalAvail),0);
+  const refs=[];
+  for(const w of byCount){
+    if(refs.length>=3)break;
+    if(w.totalAvail===0||w.totalAvail<=topMax)break; // 정렬돼 있으니 여기서부턴 더 볼 필요 없어요
+    if(top.includes(w))continue;
+    if(refs.some(r=>r.date===w.date&&r.start===w.start))continue;
+    refs.push(w);
+  }
+  refs.forEach((w,i)=>{ w.refRank=i+1; w.missing=missingReqs(room,people,w.idxs); });
+  const anyOverlap=out.some(w=>w.totalAvail>0);
+  return {top,best:elig[0]||null,refs,minCount,anyOverlap};
+}
+
+/* 마감일만 지정된 경우(YYYY-MM-DD)에는 그날 하루가 끝나는 시점(다음 날 00:00)에 잠가요.
+   즉 "10월 13일 마감"이면 10월 13일 23:59까지 입력할 수 있어요. */
+function deadlineDate(room){
+  if(!room.deadline||room.deadline.mode==='none'||!room.deadline.value)return null;
+  const v=room.deadline.value;
+  if(v.length===10){const d=new Date(v+'T00:00:00');d.setDate(d.getDate()+1);return d;}
+  return new Date(v);
+}
+function isLocked(room){
+  if(room.confirmed)return '일정이 확정되어 더 이상 입력할 수 없어요.';
+  const dl=deadlineDate(room);
+  if(dl && new Date()>=dl)return '마감 시간이 지나 더 이상 입력할 수 없어요.';
+  return null;
+}
+function deadlineText(room){
+  if(!room.deadline||room.deadline.mode==='none'||!room.deadline.value)return '없음';
+  const v=room.deadline.value;
+  return dateLabel(v.slice(0,10))+(v.length===10?' 23:59까지':' '+v.slice(11,16)+'까지');
+}
+function reminderActive(room){
+  const dl=deadlineDate(room);
+  if(!dl)return true;
+  const now=new Date();
+  return now>=new Date(dl.getTime()-3600000) && now<dl;
+}
+
+/* ============================= 앱 상태 ============================= */
+const App={screen:'home',tab:'input',code:null,room:null,people:[],me:null,unwatch:null,draft:null,
+  homeMeetings:null,showPast:false,mainTab:'meetings',calViewYear:null,calViewMonth:null,calSelectedDate:null};
+
+function setScreen(screen,opts={}){
+  navToken++; // 진행 중이던 openRoom/goHomeScreen 비동기 결과를 무효화
+  if(App.unwatch){App.unwatch();App.unwatch=null;}
+  App.screen=screen;Object.assign(App,opts);
+  if(location.hash && screen!=='room')safeReplaceHash('#'+(App.code?('room='+App.code):''));
+  render();
+}
+
+/* 화면 전환은 비동기(Store 조회)를 거치는데, 그 사이 사용자가 다른 탭/방으로
+   먼저 이동해버리면 나중에 끝난 응답이 최신 화면을 덮어써버리는 경합이 생겨요.
+   그래서 모든 네비게이션 시작 시 토큰을 하나씩 발급하고, 비동기 작업이 끝났을 때
+   그 사이 더 최신 네비게이션이 없었는지 확인한 뒤에만 상태를 반영해요. */
+let navToken=0;
+function bumpNav(){return ++navToken;}
+/* ---- 내 다른 회의 일정(이미 확정된 것) 불러오기 ----
+   즐겨찾기·최근 방 중에서 "내가 담당자이거나 시간을 입력한" 방의 확정 일정만 모아요.
+   이 기기에서 들어가 본 CIMO 방만 대상이고, 외부 캘린더 일정은 포함되지 않아요. */
+async function loadBusy(code){
+  try{
+    const codes=new Set([...getFavorites(),...getRecents()].map(r=>r.code));
+    codes.delete(code); codes.delete('202610');
+    const keys=new Set();
+    const gp=getMyProfile();
+    if(gp&&gp.name&&gp.dept&&gp.rank)keys.add(personKey(gp.name,profileTitle(gp)));
+    if(App.me&&App.code===code)keys.add(personKey(App.me.name,App.me.title));
+    const out=[];
+    for(const c of codes){
+      const r=await Store.getRoom(c);
+      if(!r||!r.confirmed)continue;
+      const myKeys=new Set(keys);
+      const id=getIdentity(c); if(id)myKeys.add(personKey(id.name,id.title));
+      if(!myKeys.size)continue;
+      let mine = !!(r.manager && myKeys.has(personKey(r.manager.name,r.manager.title)));
+      if(!mine){ const ps=await Store.getPeople(c); mine=ps.some(p=>myKeys.has(personKey(p.name,p.title))); }
+      if(mine)out.push({code:c,name:r.name||'다른 회의',date:r.confirmed.date,start:r.confirmed.start,end:r.confirmed.end});
+    }
+    if(App.screen!=='room'||App.code!==code)return; // 그 사이 다른 화면으로 이동함
+    App.busy=out;
+    if(App.tab==='input' && App.room && out.some(b=>App.room.dates.includes(b.date)))renderRoomBody();
+  }catch(err){ console.error('다른 회의 일정을 불러오는 중 오류',err); }
+}
+function busyAt(date,t1,t2){ return (App.busy||[]).find(b=>b.date===date && b.start<t2 && b.end>t1) || null; }
+async function openRoom(code,tab){
+  const myToken=bumpNav();
+  if(App.unwatch){App.unwatch();App.unwatch=null;}
+  try{
+    const room=await Store.getRoom(code);
+    if(myToken!==navToken)return false; // 그 사이 다른 곳으로 이동함 → 이 결과는 조용히 버림(정상)
+    if(!room){toast('존재하지 않는 방 코드예요');return false;}
+    const people=await Store.getPeople(code);
+    if(myToken!==navToken)return false;
+    App.code=code;App.room=room;App.people=people;
+    /* 내 정보에 전역 프로필을 저장해뒀다면, 그 방에 예전에 다른 이름으로 남아있던
+       기록보다 "지금의 나"를 항상 우선해요 — 그래야 매번 안 바뀌어요. */
+    const gp=getMyProfile();
+    if(gp && gp.name && gp.rank){
+      const t=profileTitle(gp);
+      App.me={name:gp.name,title:t};
+      setIdentity(code,gp.name,t);
+    } else { App.me=getIdentity(code); }
+    App.tab=tab||(room.confirmed||code==='202610'?'results':'input');
+    App.draft={pendingCells:null,name:'',title:''};
+    pushRecent(code,room.name);
+    App.busy=[];
+    App.unwatch=Store.watch(code,async()=>{
+      if(App.code!==code)return;
+      try{
+        const r=await Store.getRoom(code),p=await Store.getPeople(code);
+        if(App.code!==code)return;
+        App.room=r;App.people=p;
+        renderRoomBody();
+      }catch(err){ console.error('실시간 갱신 중 오류',err); }
+    });
+    App.screen='room';
+    safeReplaceHash('#room='+code);
+    render(); // render() 자체도 예외를 잡아 안전망을 가지고 있어요
+    loadBusy(code); // 내 다른 확정 회의 일정은 화면을 띄운 뒤 뒤에서 불러와요
+    return true;
+  }catch(err){
+    console.error('방을 여는 중 오류',err,code);
+    if(myToken===navToken)toast('방을 여는 중 문제가 발생했어요. 다시 시도해주세요.');
+    return false;
+  }
+}
+
+/* ============================= 렌더 ============================= */
+/* 화면 생성 중 어디선가 예외가 나면 화면이 그대로 멈춘 채 아무 반응도 없어 보이는 게
+   제일 나쁜 경우라, 무조건 잡아서 콘솔에 남기고 사용자에게도 알려요(조용히 실패 금지). */
+function render(){
+  try{
+    const shell=$('#shell');
+    if(App.screen==='home')shell.innerHTML=vHome();
+    else if(App.screen==='create')shell.innerHTML=vCreate();
+    else if(App.screen==='created')shell.innerHTML=vCreated();
+    else if(App.screen==='room')shell.innerHTML=vRoom();
+    bindGlobal();
+    if(App.screen==='create')afterCreateRender();
+    if(App.screen==='room')afterRoomRender();
+    if(App.screen==='home' && App.mainTab==='profile')afterProfileRender();
+  }catch(err){
+    console.error('화면을 그리는 중 오류',err);
+    toast('화면을 불러오지 못했어요. 홈으로 돌아가 다시 시도해주세요.');
+    try{
+      const shell=$('#shell');
+      shell.innerHTML='<div class="scr"><div class="empty-small" style="padding:40px 0;">문제가 발생했어요.</div><button class="btn btn-ghost" data-act="goHome">홈으로</button></div>';
+      bindGlobal();
+    }catch(e2){ /* 복구용 렌더조차 실패하면 더 손쓸 수 없어요 */ }
+  }
+}
+function afterProfileRender(){
+  const n=$('#p_name');
+  if(n)n.oninput=e=>{ if(PD)PD.name=e.target.value; };
+  const dc=$('#p_dept_custom');
+  if(dc)dc.oninput=e=>{ if(PD){PD.deptText=e.target.value;PD.dept=e.target.value;} };
+}
+function renderRoomBody(){
+  const body=$('#roomBody');
+  if(!body)return;
+  body.innerHTML=vRoomBody();
+  afterRoomRender();
+}
+
+/* ---------- 홈 : 내 모임 ---------- */
+async function loadHomeMeetings(){
+  const favs=getFavorites(),recents=getRecents();
+  const map=new Map();
+  favs.forEach(r=>map.set(r.code,r.name));
+  recents.forEach(r=>{ if(!map.has(r.code))map.set(r.code,r.name); });
+  const items=[];
+  for(const [code,name] of map.entries()){
+    const room=await Store.getRoom(code);
+    if(!room)continue;
+    let status,sortDate;
+    if(room.confirmed){
+      sortDate=room.confirmed.date;
+      status = cmpDate(sortDate,todayISO())>=0 ? 'upcoming':'past';
+    }else{
+      status = isLocked(room) ? 'past':'ongoing';
+      sortDate = (room.dates&&room.dates.length)? room.dates.slice().sort()[0]: null;
+    }
+    items.push({code,name:room.name||name,fav:isFav(code),room,status,sortDate});
+  }
+  items.sort((a,b)=>cmpDate(a.sortDate||'9999-12-31',b.sortDate||'9999-12-31'));
+  App.homeMeetings={
+    loading:false,
+    upcoming:items.filter(i=>i.status==='upcoming'),
+    ongoing:items.filter(i=>i.status==='ongoing'),
+    past:items.filter(i=>i.status==='past').reverse()
+  };
+}
+async function goHomeScreen(){
+  const myToken=bumpNav();
+  if(App.unwatch){App.unwatch();App.unwatch=null;}
+  App.screen='home';render();
+  await loadHomeMeetings();
+  if(myToken!==navToken)return;
+  if(App.screen==='home')render();
+}
+function headerDateLabel(){
+  const d=new Date();
+  return `${d.getMonth()+1}월 ${d.getDate()}일 ${DOW[d.getDay()]}요일`;
+}
+function dayBadge(iso){
+  const d=new Date(iso+'T00:00:00');
+  return `<div style="text-align:center;min-width:38px;flex-shrink:0;">
+    <div style="font-size:22px;font-weight:800;line-height:1.1;">${d.getDate()}</div>
+    <div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">${DOW[d.getDay()]}</div>
+  </div>`;
+}
+function heroCard(item){
+  const c=item.room.confirmed;
+  return `<div class="card" style="display:flex;gap:14px;align-items:center;cursor:pointer;" data-act="enter" data-code="${item.code}">
+    ${dayBadge(item.sortDate)}
+    <div style="flex:1;min-width:0;">
+      <div class="muted" style="font-size:12px;">다음 모임</div>
+      <div style="font-weight:700;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(item.name)} <span style="color:var(--ink-soft);font-weight:500;">${minToHHMM(c.start)}</span></div>
+    </div>
+    <span style="color:var(--ink-faint);font-size:18px;">›</span>
+  </div>`;
+}
+function meetingRow(item){
+  const {code,name,fav,room,sortDate}=item;
+  let meta;
+  if(room.confirmed){
+    meta=`${dateLabel(sortDate)} ${minToHHMM(room.confirmed.start)}~${minToHHMM(room.confirmed.end)}`;
+  }else{
+    meta = (room.deadline&&room.deadline.mode!=='none') ? ('마감 '+dateLabel(room.deadline.value.slice(0,10))) : '마감 없음';
+  }
+  return `<div class="roomitem" data-act="enter" data-code="${code}">
+    <button class="star ${fav?'on':''}" style="font-size:17px;padding:2px 8px 2px 0;flex-shrink:0;" data-act="favRow" data-code="${code}" data-name="${esc(name)}">${fav?'★':'☆'}</button>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(name)}</div>
+      <div class="muted" style="font-size:11.5px;margin-top:1px;">${meta}</div>
+    </div>
+    <button class="iconbtn" style="width:32px;height:32px;font-size:18px;color:var(--ink-faint);" data-act="leaveAsk" data-code="${code}" data-name="${esc(name)}" aria-label="더보기">⋯</button>
+  </div>`;
+}
+function vHome(){
+  let body;
+  if(App.mainTab==='calendar')body=vCalendarTab();
+  else if(App.mainTab==='week')body=vWeekTab();
+  else if(App.mainTab==='profile')body=vProfileTab();
+  else body=vMeetingsTab();
+  const ab = App.mainTab==='calendar'? ['캘린더','내 모임 한눈에']
+    : App.mainTab==='week'? ['주간 시간표','이번 주 일정']
+    : App.mainTab==='profile'? ['내 정보','프로필 · 설정'] : ['CIMO',headerDateLabel()];
+  return `<div class="appbar"><div class="brand">${ab[0]}</div><div class="sub">${esc(ab[1])}</div></div>`+body+mainTabsHtml();
+}
+function mainTabsHtml(){
+  return `<div class="tabs">
+    <button class="tab ${App.mainTab==='meetings'?'on':''}" data-act="mainTab" data-v="meetings">${icoTab(IC.list)}모임</button>
+    <button class="tab ${App.mainTab==='calendar'?'on':''}" data-act="mainTab" data-v="calendar">${icoTab(IC.cal)}캘린더</button>
+    <button class="tab ${App.mainTab==='week'?'on':''}" data-act="mainTab" data-v="week">${icoTab(IC.week)}주간</button>
+    <button class="tab ${App.mainTab==='profile'?'on':''}" data-act="mainTab" data-v="profile">${icoTab(IC.user)}내 정보</button>
+  </div>`;
+}
+function vMeetingsTab(){
+  const hm=App.homeMeetings;
+  if(!hm||hm.loading){
+    return `<div class="scr">
+      <div class="row between" style="padding:2px 2px 0;align-items:center;">
+        <h1 style="margin:0;font-size:22px;font-weight:900;">내 모임</h1>
+        <button class="btn btn-primary btn-sm" style="width:auto;" data-act="goCreate">+ 만들기</button>
+      </div>
+      <div class="empty-small" style="padding:30px 0;">불러오는 중…</div>
+    </div>`;
+  }
+  const {upcoming,ongoing,past}=hm;
+  return `
+  <div class="scr">
+    <div class="row between" style="padding:2px 2px 0;align-items:center;">
+      <h1 style="margin:0;font-size:22px;font-weight:900;">내 모임</h1>
+      <button class="btn btn-primary btn-sm" style="width:auto;" data-act="goCreate">+ 만들기</button>
+    </div>
+    ${upcoming.length? heroCard(upcoming[0]):''}
+    <hr class="sep">
+    <div class="sectitle" style="padding:0 2px;">진행 중인 조율</div>
+    <div style="display:flex;flex-direction:column;gap:2px;">
+      ${ongoing.length? ongoing.map(i=>meetingRow(i)).join(''): '<div class="empty-small" style="padding:26px 0;">진행 중인 조율이 없어요.</div>'}
+    </div>
+    <hr class="sep">
+    <button class="row between btn-text" style="width:100%;padding:10px 2px;" data-act="togglePast">
+      <span>지난 모임 ${past.length}</span><span>${App.showPast?'︿':'﹀'}</span>
+    </button>
+    ${App.showPast? `<div style="display:flex;flex-direction:column;gap:2px;">${past.length? past.map(i=>meetingRow(i)).join(''):'<div class="empty-small">지난 모임이 없어요</div>'}</div>`:''}
+    <details class="menu" style="margin-top:8px;"><summary>코드로 참여하기</summary>
+      <div class="roomlist" style="padding:2px 10px 16px;display:flex;flex-direction:column;gap:10px;">
+        <div class="row"><input id="joinCode" class="codeinput" type="text" inputmode="numeric" maxlength="6" placeholder="6자리 코드" style="flex:1;"><button class="btn btn-ghost btn-sm" data-act="joinRoom">입장</button></div>
+        <div id="joinErr"></div>
+        <button class="btn-text" data-act="goDemo" style="align-self:flex-start;">✦ 이용 방법 보기 (예시 방)</button>
+      </div>
+    </details>
+  </div>`;
+}
+/* ---- 캘린더 탭: 내 모임을 달력 뷰로 (외부 개인 캘린더 연동은 다음 단계) ---- */
+function buildCalendarMarks(hm){
+  const map={};
+  function add(date,item,kind){ if(!date)return; (map[date]=map[date]||[]).push(Object.assign({},item,{kind})); }
+  hm.upcoming.forEach(i=>add(i.sortDate,i,'confirmed'));
+  hm.past.forEach(i=>add(i.sortDate,i,'past'));
+  hm.ongoing.forEach(i=>{ (i.room.dates||[]).forEach(d=>add(d,i,'candidate')); });
+  return map;
+}
+/* 날짜 상세 목록: 확정 시간이 있는 회의는 시작 시각 순으로, 아직 조율 중인 회의는 뒤로 */
+function sortDayItems(list){
+  return list.slice().sort((a,b)=>{
+    const as=a.room.confirmed? a.room.confirmed.start:null;
+    const bs=b.room.confirmed? b.room.confirmed.start:null;
+    if(as!=null&&bs!=null)return as-bs;
+    if(as!=null)return -1;
+    if(bs!=null)return 1;
+    return (a.name||'').localeCompare(b.name||'');
+  });
+}
+function calendarDayRow(item){
+  const {code,name,room}=item;
+  const hasTime=!!room.confirmed;
+  const timeTxt=hasTime
+    ? `${minToHHMM(room.confirmed.start)}-${minToHHMM(room.confirmed.end)}`
+    : '조율 중';
+  return `<div class="roomitem" style="cursor:default;">
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(name)}</div>
+      ${hasTime?'':`<div class="muted" style="font-size:11.5px;margin-top:1px;">${(room.deadline&&room.deadline.mode!=='none')?('마감 '+dateLabel(room.deadline.value.slice(0,10))):'마감 없음'}</div>`}
+    </div>
+    <div class="disp" style="font-size:13px;font-weight:700;white-space:nowrap;margin-left:8px;color:${hasTime?'var(--ink)':'var(--ink-faint)'};">${timeTxt}</div>
+  </div>`;
+}
+/* ---- 주간 시간표: 월~일 요일별로, 확정된 회의를 실제 시간 위치에 맞춰 블럭으로 보여줘요 ---- */
+function mondayOf(iso){
+  const d=new Date(iso+'T00:00:00');
+  const dow=d.getDay(); // 0=일 ... 6=토
+  d.setDate(d.getDate()+(dow===0?-6:1-dow));
+  return toISODate(d);
+}
+const WEEK_PALETTE=['#D04A02','#3D74C9','#6B8F3C','#9B5FB0','#C9873D','#2F8F6E','#B23F5E'];
+function colorForCode(code){
+  let h=0; for(let i=0;i<code.length;i++)h=(h*31+code.charCodeAt(i))|0;
+  return WEEK_PALETTE[Math.abs(h)%WEEK_PALETTE.length];
+}
+function vWeekTab(){
+  const hm=App.homeMeetings;
+  if(!hm||hm.loading)return `<div class="scr"><div class="empty-small" style="padding:30px 0;">불러오는 중…</div></div>`;
+  if(!App.weekRef)App.weekRef=todayISO();
+  const monday=mondayOf(App.weekRef);
+  const days=[];for(let i=0;i<7;i++)days.push(addDaysISO(monday,i));
+  const byDate={};
+  let any=false;
+  hm.upcoming.concat(hm.past).forEach(item=>{
+    const c=item.room&&item.room.confirmed;
+    if(c&&days.includes(c.date)){(byDate[c.date]=byDate[c.date]||[]).push(item);any=true;}
+  });
+  /* 00:00~24:00 하루 전체를, 스크롤 없이 한 화면에 다 보여줘요. */
+  const minMin=0, maxMin=24*60;
+  const totalMin=maxMin-minMin;
+  const heightPx=560;
+  const hourMarks=[];for(let h=0;h<=24;h++)hourMarks.push(h);
+  const today=todayISO();
+  const dayCols=days.map(d=>{
+    const items=(byDate[d]||[]).filter(it=>it.room.confirmed.start<maxMin && it.room.confirmed.end>minMin);
+    const blocks=items.map(it=>{
+      const c=it.room.confirmed;
+      const top=Math.max(0,(c.start-minMin)/totalMin*100);
+      const h=Math.max(3,(Math.min(maxMin,c.end)-Math.max(minMin,c.start))/totalMin*100);
+      const bg=colorForCode(it.code);
+      return `<div class="wk-block" style="top:${top}%;height:${h}%;background:${bg};" title="${esc(it.name)} ${minToHHMM(c.start)}~${minToHHMM(c.end)}"><div class="wk-block-name">${esc(it.name)}</div></div>`;
+    }).join('');
+    return `<div class="wk-day ${d===today?'today':''}">${blocks}</div>`;
+  }).join('');
+  const hourRows=hourMarks.map(h=>`<div class="wk-hourlbl" style="top:${(h*60-minMin)/totalMin*100}%;">${pad(h)}:00</div>`).join('');
+  const dayHeads=days.map(d=>{
+    const dt=new Date(d+'T00:00:00');
+    return `<div class="wk-headcell ${d===today?'today':''}">${DOW[dt.getDay()]}<span class="wk-headdate">${dt.getDate()}</span></div>`;
+  }).join('');
+  return `<div class="scr">
+    <div class="row" style="justify-content:center;align-items:center;gap:16px;padding:4px 0 10px;">
+      <button class="iconbtn" data-act="weekNav" data-v="-7">‹</button>
+      <b style="font-size:14px;">${monday.slice(5).replace('-','/')} ~ ${days[6].slice(5).replace('-','/')}</b>
+      <button class="iconbtn" data-act="weekNav" data-v="7">›</button>
+    </div>
+    <div class="card" style="padding:8px 10px 12px;">
+      <div class="wk-headrow"><div class="wk-hourcol"></div><div class="wk-headdays">${dayHeads}</div></div>
+      <div class="wk-wrap" style="height:${heightPx}px;">
+        <div class="wk-hourcol">${hourRows}</div>
+        <div class="wk-days">${dayCols}</div>
+      </div>
+    </div>
+    ${!any?'<div class="muted" style="text-align:center;padding:10px 0;">이번 주에 확정된 모임이 없어요</div>':''}
+  </div>`;
+}
+function vCalendarTab(){
+  const hm=App.homeMeetings;
+  if(!hm||hm.loading)return `<div class="scr"><div class="empty-small" style="padding:30px 0;">불러오는 중…</div></div>`;
+  if(App.calViewYear==null){ const t=new Date(); App.calViewYear=t.getFullYear(); App.calViewMonth=t.getMonth(); }
+  const marks=buildCalendarMarks(hm);
+  const y=App.calViewYear,m=App.calViewMonth;
+  const first=new Date(y,m,1);const startDow=first.getDay();
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const today=todayISO();
+  let cells='';
+  for(let i=0;i<startDow;i++)cells+='<div class="cal-day off"></div>';
+  for(let d=1;d<=daysInMonth;d++){
+    const iso=y+'-'+pad(m+1)+'-'+pad(d);
+    const has=marks[iso];
+    const sel=App.calSelectedDate===iso;
+    let dot='';
+    if(has&&has.length){
+      const color=has.some(x=>x.kind==='confirmed')?'var(--gold)':(has.some(x=>x.kind==='candidate')?'var(--brand)':'var(--ink-faint)');
+      dot=`<span style="position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:${color};"></span>`;
+    }
+    cells+=`<div class="cal-day ${sel?'sel':''} ${iso===today?'today':''}" style="position:relative;" data-act="calPick" data-v="${iso}">${d}${dot}</div>`;
+  }
+  const list = App.calSelectedDate ? marks[App.calSelectedDate] : null;
+  return `<div class="scr">
+    
+    <div class="card">
+      <div class="cal-head"><button class="iconbtn" data-act="calNavMain" data-v="-1">‹</button><b>${y}년 ${m+1}월</b><button class="iconbtn" data-act="calNavMain" data-v="1">›</button></div>
+      <div class="cal-grid">${DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('')}${cells}</div>
+    </div>
+    <div class="row" style="gap:14px;padding:2px;font-size:11.5px;color:var(--ink-soft);">
+      <span class="row" style="gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--gold);display:inline-block;"></span>확정</span>
+      <span class="row" style="gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--brand);display:inline-block;"></span>조율 중</span>
+      <span class="row" style="gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--ink-faint);display:inline-block;"></span>지난 모임</span>
+    </div>
+    ${App.calSelectedDate? `<div class="sectitle" style="padding:0 2px;">${dateLabel(App.calSelectedDate,true)}</div>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        ${list&&list.length? sortDayItems(list).map(i=>calendarDayRow(i)).join(''): '<div class="empty-small">이 날짜엔 모임이 없어요</div>'}
+      </div>` : '<div class="muted" style="text-align:center;padding:14px 0;">날짜를 선택하면 그날의 모임을 볼 수 있어요</div>'}
+  </div>`;
+}
+/* ---- 내 정보 탭: 지금은 뼈대만, 세부 구성은 다음 작업에서 ---- */
+function vProfileTab(){
+  const gp=getMyProfile();
+  const showForm = !gp || profileEditMode;
+  let profileBlock;
+  if(showForm){
+    if(!PD)initProfileDraft();
+    profileBlock=`<div class="card" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="sectitle">내 이름 · 부서(선택) · 직급</div>
+      <div class="muted" style="margin-top:-8px;">한 번 등록해두면 모임 방에 들어갈 때마다 다시 입력하지 않아도 돼요.</div>
+      <div class="field">
+        <label>이름</label>
+        <input type="text" id="p_name" placeholder="이름" value="${esc(PD.name)}">
+      </div>
+      <div class="field">
+        <label>부서 <span style="font-weight:400;color:var(--ink-faint);">선택</span></label>
+        <div class="segrow">${DEPTS.map(d=>`<button class="seg ${!PD.deptCustom&&PD.dept===d?'on':''}" data-act="profDept" data-v="${d}">${d}</button>`).join('')}<button class="seg ${PD.deptCustom?'on':''}" data-act="profDept" data-v="__custom">직접 입력</button></div>
+        ${PD.deptCustom?`<input type="text" id="p_dept_custom" placeholder="부서명 입력 (예: Deals)" maxlength="20" value="${esc(PD.deptText||'')}">`:''}
+        <div class="muted" style="font-size:12px;">부서는 비워둬도 돼요. 선택한 부서를 한 번 더 누르면 해제돼요.</div>
+      </div>
+      <div class="field">
+        <label>직급</label>
+        <div class="segrow">${RANKS.map(r=>`<button class="seg ${PD.rank===r?'on':''}" data-act="profRank" data-v="${r}">${r}</button>`).join('')}</div>
+      </div>
+      <div id="profErr" class="err"></div>
+      <div class="row">
+        <button class="btn btn-primary btn-sm" data-act="saveProfile">저장</button>
+        ${gp?`<button class="btn-text" data-act="cancelEditProfile">취소</button>`:''}
+      </div>
+    </div>`;
+  }else{
+    profileBlock=`<div class="card" style="display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:24px 16px;">
+      ${profileAvatar(gp.name)}
+      <div>
+        <div style="font-size:17px;font-weight:800;">${esc(gp.name)}</div>
+        <div class="muted" style="margin-top:3px;">${esc(profileTitle(gp))}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" data-act="editProfile">수정</button>
+    </div>`;
+  }
+  return `<div class="scr">
+    
+    ${profileBlock}
+    <div class="card row between">
+      <span>테마</span>
+      <button class="btn btn-ghost btn-sm" data-act="theme">${getTheme()==='dark'?'라이트 모드로':'다크 모드로'}</button>
+    </div>
+    <div class="card">
+      <div class="sectitle">저장 상태</div>
+      <div class="muted" style="margin-top:6px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:${saveMode==='shared'?'var(--ok)':'var(--ink-faint)'};"></span>${saveMode==='shared'?'공유 저장 모드 — 링크를 받은 누구나 같은 데이터를 봐요':'미리보기 모드 — 지금은 이 기기에만 저장돼요'}</div>
+    </div>
+    <div class="muted" style="text-align:center;padding:30px 0 0;">프로필, 알림 등 나머지 구성은 다음 작업에서 채울게요.</div>
+  </div>`;
+}
+
+/* ---------- 방 만들기 ---------- */
+const C={}; // create draft
+function resetDraft(){
+  Object.assign(C,{
+    name:'',details:'',showDetails:null,
+    dates:[],calYear:new Date().getFullYear(),calMonth:new Date().getMonth(),
+    timeStart:0,timeEnd:1440,unit:30,
+    durMode:'2h',durCustomH:1,durCustomM:0,
+    deadlineMode:'auto',deadlineValue:null,
+    total:1, minCount:null,
+    required:[],reqName:'',reqRank:null,
+    pw:''
+  });
+}
+resetDraft();
+/* 기본 투표 마감은 항상 오늘로부터 일주일 뒤예요(선택한 날짜와 무관). */
+function defaultDeadline(){
+  return addDaysISO(todayISO(),7);
+}
+function vCreate(){
+  return `
+  <div class="topbar"><button class="iconbtn" data-act="goHome" aria-label="뒤로">${IC.back(22)}</button><div class="title">회의 만들기</div></div>
+  <div class="scr">
+    <div class="field">
+      <label>모임 이름</label>
+      <input type="text" id="f_name" placeholder="예) 10월 정기 회의" value="${esc(C.name)}">
+    </div>
+    <div id="detailsq">${renderDetailsQ()}</div>
+
+    <div class="card">
+      <div class="sectitle" style="margin-bottom:8px;">날짜 선택</div>
+      <div id="calBox">${renderCalendar()}</div>
+      <div class="muted" id="selDatesLbl" style="margin-top:8px;">${selDatesLabel()}</div>
+    </div>
+
+    <div class="card">
+      <div class="sectitle">시간대</div>
+      <div class="row" style="margin-top:8px;">
+        <select id="f_tstart">${timeOptions(C.timeStart)}</select>
+        <span class="muted">~</span>
+        <select id="f_tend">${timeOptions(C.timeEnd,true)}</select>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sectitle">시간 단위 (표 한 칸)</div>
+      <div class="segrow" style="margin-top:8px;">
+        ${[15,30,60].map(u=>`<button class="seg ${C.unit===u?'on':''}" data-act="setUnit" data-v="${u}">${u}분</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sectitle">소요 시간</div>
+      <div class="segrow" style="margin-top:8px;">
+        ${[['1h','1시간'],['2h','2시간'],['3h','3시간'],['custom','직접 입력']].map(([k,l])=>`<button class="seg ${C.durMode===k?'on':''}" data-act="setDur" data-v="${k}">${l}</button>`).join('')}
+      </div>
+      ${C.durMode==='custom'?`<div class="row" style="margin-top:10px;">
+        <div class="stepper"><button data-act="durH" data-v="-1">−</button><b>${C.durCustomH}시간</b><button data-act="durH" data-v="1">+</button></div>
+        <div class="stepper"><button data-act="durM" data-v="-15">−</button><b>${C.durCustomM}분</b><button data-act="durM" data-v="15">+</button></div>
+      </div>`:''}
+    </div>
+
+    <div class="card">
+      <div class="sectitle">투표 마감</div>
+      <div class="segrow" style="margin-top:8px;">
+        <button class="seg ${C.deadlineMode!=='none'?'on':''}" data-act="dlMode" data-v="manual">마감 설정</button>
+        <button class="seg ${C.deadlineMode==='none'?'on':''}" data-act="dlMode" data-v="none">마감 없음</button>
+      </div>
+      ${C.deadlineMode!=='none'?`<div style="margin-top:10px;">
+        <input type="date" id="f_deadline" min="${todayISO()}" value="${C.deadlineValue||defaultDeadline()}">
+        <div class="muted" style="margin-top:6px;">기본값은 오늘로부터 일주일 뒤예요. 선택한 날 밤 23:59까지 입력할 수 있어요.</div>
+      </div>`:''}
+    </div>
+
+    <div class="card" style="display:flex;flex-direction:column;gap:12px;">
+      <div class="sectitle">담당자</div>
+      ${renderCreatorAsManager()}
+      <hr class="sep">
+      <div class="row between"><span class="sectitle">총 인원</span>
+        <div class="stepper"><button data-act="total" data-v="-1">−</button><b id="totalNum">${C.total}</b><button data-act="total" data-v="1">+</button></div>
+      </div>
+      <hr class="sep">
+      <div class="row between"><span class="sectitle">최소 참석 인원</span>
+        <div class="stepper"><button data-act="minc" data-v="-1">−</button><b>${C.minCount==null?majorityOf(C.total):C.minCount}</b><button data-act="minc" data-v="1">+</button></div>
+      </div>
+      <div class="muted" style="margin-top:-6px;">${C.minCount==null?`기본은 과반(${majorityOf(C.total)}명)이에요. `:''}이보다 적게 모이는 시간은 추천하지 않아요.${C.minCount!=null?` <button class="btn-text" style="padding:0;font-size:13px;" data-act="mincAuto">과반으로 되돌리기</button>`:''}</div>
+      <hr class="sep">
+      <div class="sectitle">필참자</div>
+      <div id="reqChips" class="chiprow">${renderReqChips()}</div>
+      <input type="text" id="f_reqname" placeholder="이름(선택)" value="${esc(C.reqName||'')}" style="border:1px solid var(--line-strong);background:var(--bg-elev);color:var(--ink);border-radius:var(--radius-sm);padding:11px 12px;font-size:15px;width:100%;">
+      <div class="segrow">${RANKS.map(r=>`<button class="seg ${C.reqRank===r?'on':''}" data-act="reqRank" data-v="${r}">${r}</button>`).join('')}</div>
+      <button class="btn btn-ghost btn-sm" data-act="addReq" style="align-self:flex-start;">필참자 추가</button>
+      <div class="muted">이름 없이 직급만 고르면 '그 직급 중 1명'으로 처리돼요.</div>
+    </div>
+
+    <div class="field">
+      <label>방장 비밀번호 (4자 이상)</label>
+      <input type="password" id="f_pw" placeholder="확정·설정 수정 시 사용해요" value="${esc(C.pw)}">
+    </div>
+
+    <div id="createErr" class="err"></div>
+    <button class="btn btn-primary" data-act="submitCreate">링크 만들기 ${IC.arrow(18)}</button>
+    <div class="muted" style="text-align:center;margin-top:-8px;font-size:12px;">로그인 없이 링크 하나로 공유</div>
+  </div>`;
+}
+function renderCreatorAsManager(){
+  const gp=getMyProfile();
+  if(gp && gp.name && gp.rank){
+    return `<div class="row" style="gap:10px;">
+      ${profileAvatar(gp.name,40)}
+      <div><div style="font-weight:700;">${esc(gp.name)}</div><div class="muted" style="font-size:12.5px;">${esc(profileTitle(gp))}</div></div>
+    </div>
+    <div class="muted">방을 만드는 ${esc(gp.name)}님이 자동으로 담당자·필참자가 돼요. (내 정보에서 변경 가능)</div>`;
+  }
+  return `<div class="banner-lock">담당자 정보가 아직 없어요. 먼저 "내 정보"에서 이름·직급을 등록해주세요.</div>
+    <button class="btn btn-ghost btn-sm" style="width:auto;align-self:flex-start;" data-act="gotoProfileFromCreate">내 정보로 이동</button>`;
+}
+function renderDetailsQ(){
+  if(C.showDetails===null){
+    return `<div class="card row between"><span style="font-size:14px;">세부내용을 입력하시겠습니까?</span>
+      <div class="row"><button class="btn btn-ghost btn-sm" data-act="detailsYes">입력</button><button class="btn-text" data-act="detailsNo">아니요</button></div></div>`;
+  }
+  if(C.showDetails){
+    return `<div class="field"><label>세부내용</label><textarea id="f_details" rows="3" style="border:1px solid var(--line-strong);background:var(--bg-elev);color:var(--ink);border-radius:var(--radius-sm);padding:11px 12px;width:100%;">${esc(C.details)}</textarea></div>`;
+  }
+  return '';
+}
+function timeOptions(val,isEnd){
+  let out='';
+  for(let m=0;m<=1440;m+=30){
+    if(!isEnd && m===1440)continue;
+    if(isEnd && m===0)continue;
+    out+=`<option value="${m}" ${m===val?'selected':''}>${m===1440?'24:00':minToHHMM(m)}</option>`;
+  }
+  return out;
+}
+function selDatesLabel(){
+  if(!C.dates.length)return '선택된 날짜가 없어요';
+  return C.dates.slice().sort().map(d=>dateLabel(d)).join(', ');
+}
+function renderCalendar(){
+  const y=C.calYear,m=C.calMonth;
+  const first=new Date(y,m,1);const startDow=first.getDay();
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const today=todayISO();
+  let cells='';
+  for(let i=0;i<startDow;i++)cells+='<div class="cal-day off"></div>';
+  for(let d=1;d<=daysInMonth;d++){
+    const iso=y+'-'+pad(m+1)+'-'+pad(d);
+    const past=iso<today;
+    const sel=C.dates.includes(iso);
+    cells+=`<div class="cal-day ${past?'past':''} ${sel?'sel':''} ${iso===today?'today':''}" ${past?'':`data-act="toggleDate" data-v="${iso}"`}>${d}</div>`;
+  }
+  return `<div class="cal-head"><button class="iconbtn" data-act="calPrev">‹</button><b>${y}년 ${m+1}월</b><button class="iconbtn" data-act="calNext">›</button></div>
+  <div class="cal-grid">${DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('')}${cells}</div>`;
+}
+function renderReqChips(){
+  if(!C.required.length)return '<span class="chip pinned">담당자 (고정)</span>';
+  return '<span class="chip pinned">담당자 (고정)</span>'+C.required.map((r,i)=>`<span class="chip x">${esc(r.type==='name'?(r.name+' · '+r.title):('직급: '+r.title))}<button data-act="rmReq" data-v="${i}">✕</button></span>`).join('');
+}
+function afterCreateRender(){
+  const n=$('#f_name');
+  if(n)n.oninput=e=>C.name=e.target.value;
+  const d=$('#f_details');if(d)d.oninput=e=>C.details=e.target.value;
+  const ts=$('#f_tstart');if(ts)ts.onchange=e=>{C.timeStart=+e.target.value;};
+  const te=$('#f_tend');if(te)te.onchange=e=>{C.timeEnd=+e.target.value;};
+  const dl=$('#f_deadline');if(dl)dl.onchange=e=>{C.deadlineValue=e.target.value;};
+  const pw=$('#f_pw');if(pw)pw.oninput=e=>C.pw=e.target.value;
+  const rq=$('#f_reqname');if(rq)rq.oninput=e=>C.reqName=e.target.value;
+}
+
+/* ---------- 방 만들기 액션 ---------- */
+function refreshCreateSection(id,html){const el=$(id);if(el)el.innerHTML=html;}
+const createActions={
+  detailsYes:()=>{C.showDetails=true;refreshCreateSection('#detailsq',renderDetailsQ());setTimeout(()=>$('#f_details')&&($('#f_details').oninput=e=>C.details=e.target.value),0);},
+  detailsNo:()=>{C.showDetails=false;C.details='';refreshCreateSection('#detailsq',renderDetailsQ());},
+  calPrev:()=>{C.calMonth--;if(C.calMonth<0){C.calMonth=11;C.calYear--;}refreshCreateSection('#calBox',renderCalendar());},
+  calNext:()=>{C.calMonth++;if(C.calMonth>11){C.calMonth=0;C.calYear++;}refreshCreateSection('#calBox',renderCalendar());},
+  toggleDate:(v)=>{
+    if(C.dates.includes(v))C.dates=C.dates.filter(x=>x!==v);else C.dates.push(v);
+    refreshCreateSection('#calBox',renderCalendar());
+    $('#selDatesLbl').textContent=selDatesLabel();
+  },
+  setUnit:(v)=>{C.unit=+v;render();},
+  setDur:(v)=>{C.durMode=v;render();},
+  durH:(v)=>{C.durCustomH=Math.max(0,C.durCustomH+(+v));render();},
+  durM:(v)=>{C.durCustomM=Math.max(0,C.durCustomM+(+v));if(C.durCustomM>=60){C.durCustomM=0;}render();},
+  dlMode:(v)=>{C.deadlineMode=v==='none'?'none':'manual';render();},
+  total:(v)=>{const min=1+C.required.length;C.total=Math.max(min,C.total+(+v));if(C.minCount!=null&&C.minCount>C.total)C.minCount=C.total;render();},
+  minc:(v)=>{const cur=C.minCount==null?majorityOf(C.total):C.minCount;C.minCount=Math.min(C.total,Math.max(1,cur+(+v)));render();},
+  mincAuto:()=>{C.minCount=null;render();},
+  reqRank:(v)=>{const el=$('#f_reqname');if(el)C.reqName=el.value;C.reqRank=(C.reqRank===v?null:v);render();},
+  addReq:()=>{
+    const el=$('#f_reqname');const nm=(el?el.value:(C.reqName||'')).trim(),ti=C.reqRank;
+    if(!ti){if(el)C.reqName=el.value;toast('직급을 선택해주세요');return;}
+    const dup=C.required.some(r=>nm?(r.type==='name'&&r.name===nm&&rankOf(r.title)===ti):(r.type==='title'&&rankOf(r.title)===ti));
+    if(dup){toast('이미 추가한 필참자예요');return;}
+    C.required.push(nm?{type:'name',name:nm,title:ti}:{type:'title',title:ti});
+    C.total=Math.max(C.total,1+C.required.length);
+    C.reqName='';C.reqRank=null;
+    render();
+  },
+  rmReq:(v)=>{C.required.splice(+v,1);render();},
+  submitCreate:async()=>{
+    const errEl=$('#createErr');errEl.textContent='';
+    const gp=getMyProfile();
+    if(!gp||!gp.name||!gp.rank){errEl.textContent='담당자 정보가 필요해요. 먼저 "내 정보"에서 이름·직급을 등록해주세요.';return;}
+    if(!C.name.trim()){errEl.textContent='모임 이름을 입력해주세요.';return;}
+    if(!C.dates.length){errEl.textContent='날짜를 1개 이상 선택해주세요.';return;}
+    const durationMin=C.durMode==='1h'?60:C.durMode==='2h'?120:C.durMode==='3h'?180:(C.durCustomH*60+C.durCustomM);
+    if(durationMin<=0){errEl.textContent='소요 시간을 확인해주세요.';return;}
+    if(durationMin>(C.timeEnd-C.timeStart)){errEl.textContent='소요 시간이 시간대보다 길어요.';return;}
+    if(C.required.length+1>C.total){errEl.textContent='필참자 수가 총 인원보다 많아요.';return;}
+    if(!C.pw||C.pw.length<4){errEl.textContent='방장 비밀번호는 4자 이상이어야 해요.';return;}
+    let code;
+    for(let i=0;i<30;i++){const c=String(Math.floor(100000+Math.random()*900000));if(c!=='202610' && !(await Store.getRoom(c))){code=c;break;}}
+    if(!code){errEl.textContent='코드 생성에 실패했어요. 다시 시도해주세요.';return;}
+    const pwHash=await sha256Hex(C.pw);
+    const managerTitle=profileTitle(gp);
+    const required=[{type:'name',name:gp.name,title:managerTitle},...C.required];
+    /* 화면에 보이는 마감일을 그대로 저장해요(예전엔 저장 시 다시 계산해서 화면과 달라지는 버그가 있었어요) */
+    const dlInput=$('#f_deadline');
+    const dlVal=(dlInput&&dlInput.value)?dlInput.value:(C.deadlineValue||defaultDeadline());
+    if(C.deadlineMode!=='none' && cmpDate(dlVal,todayISO())<0){errEl.textContent='투표 마감일이 오늘보다 이전이에요.';return;}
+    const deadline= C.deadlineMode==='none'?{mode:'none',value:null}:{mode:'manual',value:dlVal};
+    const room={
+      code,name:C.name.trim(),details:C.details||'',dates:C.dates.slice().sort(),
+      timeStart:C.timeStart,timeEnd:C.timeEnd,unit:C.unit,durationMin,
+      deadline,manager:{name:gp.name,title:managerTitle},
+      totalCount:C.total,minCount:C.minCount,required,pwHash,confirmed:null,createdAt:Date.now()
+    };
+    await Store.setRoom(code,room);
+    const doneCode=code;resetDraft();
+    setScreen('created',{code:doneCode});
+  }
+};
+
+/* ---------- 생성 완료 ---------- */
+function vCreated(){
+  const code=App.code;
+  const link=baseUrl()+'#room='+code;
+  const invite=`📅 회의 시간 투표에 참여해주세요!\n아래 링크를 누르면 바로 들어와서 가능한 시간을 표시할 수 있어요.\n${link}\n(링크가 안 열리면 코드 ${code}로 직접 입장해주세요)`;
+  return `
+  <div class="scr" style="align-items:center;text-align:center;padding-top:60px;">
+    <div class="donebig">${IC.check(32)}</div>
+    <h1 style="margin:0;font-size:22px;font-weight:900;">방이 만들어졌어요</h1>
+    <div class="disp" style="font-size:36px;font-weight:700;letter-spacing:.1em;color:var(--brand-ink);">${code}</div>
+    <div class="muted">이 코드로 다른 사람이 입장할 수 있어요</div>
+    <div class="card" style="width:100%;text-align:left;white-space:pre-wrap;font-size:13.5px;color:var(--ink-soft);">${esc(invite)}</div>
+    <button class="btn btn-ghost" data-act="copyInvite" data-code="${code}">단톡방용 초대 문구 복사</button>
+    <button class="btn btn-primary" data-act="enter" data-code="${code}">방 입장하기</button>
+  </div>`;
+}
+
+/* ---------- 방(room) ---------- */
+function vRoom(){
+  return `
+  <div class="topbar">
+    <button class="iconbtn" data-act="goHome" aria-label="뒤로">${IC.back(22)}</button>
+    <div class="title">${esc(App.room.name)}</div>
+    <button class="star ${isFav(App.code)?'on':''}" data-act="fav">☆</button>
+    <button class="roomchip" data-act="copyInvite" data-code="${App.code}"><b>${App.code}</b> <span class="ico">${IC.copy(14)}</span></button>
+    <span class="modeic" title="${App.code==='202610'?'예시 방':(saveMode==='shared'?'공유 저장 모드':'미리보기 모드')}">${App.code==='202610'?IC.flask(17):(saveMode==='shared'?IC.link(17):IC.device(17))}</span>
+    <button class="iconbtn" data-act="theme" aria-label="테마 전환">${getTheme()==='dark'?IC.sun(19):IC.moon(19)}</button>
+    <button class="iconbtn" data-act="hostMenu" aria-label="방 설정">${IC.gear(19)}</button>
+  </div>
+  <div id="roomBody">${vRoomBody()}</div>
+  <div class="tabs">
+    ${App.room.confirmed?'':`<button class="tab ${App.tab==='input'?'on':''}" data-act="tab" data-v="input">${icoTab(IC.pen)}시간입력</button>`}
+    <button class="tab ${App.tab==='results'?'on':''}" data-act="tab" data-v="results">${icoTab(IC.trophy)}추천결과</button>
+    <button class="tab ${App.tab==='status'?'on':''}" data-act="tab" data-v="status">${icoTab(IC.users)}참여현황</button>
+  </div>`;
+}
+function vRoomBody(){
+  const room=App.room;
+  let banner='';
+  if(room.confirmed){
+    banner=`<div class="banner-gold">일정이 확정되었습니다<br>${dateLabel(room.confirmed.date)} ${minToHHMM(room.confirmed.start)}~${minToHHMM(room.confirmed.end)}${room.confirmed.attendees?`<div style="font-weight:400;font-size:12.5px;margin-top:4px;">참여: ${esc(room.confirmed.attendees.map(a=>a.name).join(', ')||'없음')}</div>`:''}</div>`;
+  } else {
+    const lock=isLocked(room);
+    if(lock)banner=`<div class="banner-lock">${lock}</div>`;
+  }
+  let body='';
+  if(App.tab==='input')body=vInput();
+  else if(App.tab==='results')body=vResults();
+  else body=vStatus();
+  return `<div class="scr" id="roomBodyInner">${banner?banner:''}${body}</div>`;
+}
+
+/* ---- 시간 입력 ---- */
+function vInput(){
+  const room=App.room,people=App.people;
+  const lockMsg=isLocked(room);
+  if(!App.me){
+    const chips=room.required.filter(r=>r.type==='name'&&!reqJoined(r,people));
+    return `
+    <div class="card">
+      <div class="sectitle" style="margin-bottom:8px;">이름을 입력해주세요</div>
+      ${chips.length?`<div class="chiprow" style="margin-bottom:10px;">${chips.map(r=>`<span class="chip" data-act="fillId" data-name="${esc(r.name)}" data-title="${esc(r.title)}">${esc(r.name)} · ${esc(r.title)}</span>`).join('')}</div>`:''}
+      <div class="field"><label>이름</label><input type="text" id="f_iname" placeholder="이름"></div>
+      <div class="field" style="margin-top:10px;"><label>직급</label><input type="text" id="f_ititle" placeholder="직급"></div>
+      <div id="dupMsg"></div>
+      <button class="btn btn-primary" style="margin-top:12px;" data-act="checkId">다음</button>
+    </div>`;
+  }
+  if(lockMsg){
+    const sec=renderTop3Section(room,people);
+    return `<div class="banner-lock">${lockMsg}</div>
+      ${sec.html}
+      <div class="sectitle" style="padding:0 2px;">참여 현황</div>
+      ${renderParticipationChips()}`;
+  }
+  const cpd=cellsPerDayOf(room);
+  const existing=people.find(p=>p.id===personKey(App.me.name,App.me.title));
+  if(!App.draft.pendingCells)App.draft.pendingCells=(existing?existing.cells:'0'.repeat(room.dates.length*cpd)).split('');
+  return `
+  <div class="row between"><span style="font-weight:700;">${esc(App.me.name)} · ${esc(App.me.title)}</span><button class="btn-text" data-act="switchId">다른 이름</button></div>
+  <div class="muted">칸을 눌러 가능한 시간을 표시해주세요. PC는 드래그로 칠할 수 있어요.</div>
+  ${(App.busy||[]).some(b=>room.dates.includes(b.date))?`<div class="muted" style="font-size:12px;"><span class="busy-legend"></span>회색 빗금은 이미 확정된 내 다른 회의예요. 선택은 그대로 할 수 있어요. (CIMO에서 잡은 일정만 표시돼요)</div>`:''}
+  <div class="row" style="justify-content:flex-end;">
+    <label class="row" style="font-size:12px;gap:4px;"><input type="checkbox" id="dragToggle" ${LS.get('cimo:dragToggle',false)?'checked':''}> 모바일 드래그 선택</label>
+  </div>
+  <div class="gridwrap" id="gridWrap">${renderInputTable()}</div>
+  <button class="btn btn-primary" data-act="saveInput">저장하기</button>`;
+}
+function renderInputTable(){
+  const room=App.room;const cpd=cellsPerDayOf(room);
+  let head='<tr><th class="timecol-h"></th>'+room.dates.map(d=>`<th>${dateLabel(d)}</th>`).join('')+'</tr>';
+  let rows='';
+  for(let s=0;s<cpd;s++){
+    rows+=`<tr><td class="timecol">${minToHHMM(room.timeStart+s*room.unit)}</td>`;
+    room.dates.forEach((d,dIdx)=>{
+      const idx=dIdx*cpd+s;
+      const on=App.draft.pendingCells[idx]==='1';
+      const t=room.timeStart+s*room.unit;
+      const b=busyAt(d,t,t+room.unit);
+      const prevB= s>0? busyAt(d,t-room.unit,t):null;
+      const lbl= b && b!==prevB ? `<span class="busy-lbl">${esc(b.name)}</span>` : '';
+      const tip= b ? ` title="${esc(b.name)} ${minToHHMM(b.start)}~${minToHHMM(b.end)} (확정된 내 회의)"` : '';
+      rows+=`<td><div class="cell ${on?'on':''} ${b?'busy':''}" data-idx="${idx}"${tip}>${lbl}</div></td>`;
+    });
+    rows+='</tr>';
+  }
+  return `<table class="timetable"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+}
+
+/* ---- 추천 결과 ---- */
+/* 확정/마감 후 시간입력 화면에서 바로 보여주는 참여 현황 칩: 제출한 사람은 체크,
+   아직 안 낸 필참자는 흐리게 "…"로 표시해요. 필참자는 ★ 표시. */
+function renderParticipationChips(){
+  const room=App.room,people=App.people;
+  const pendingReq=room.required.filter(r=>r.type==='name'&&!reqJoined(r,people));
+  const restCount=Math.max(0,room.totalCount-people.length-pendingReq.length);
+  const chips=[
+    ...people.map(p=>`<span class="statchip done">${isReqPerson(room,p)?'★ ':''}${esc(p.name)} ${esc(p.title)} ${IC.check(13)}</span>`),
+    ...pendingReq.map(r=>`<span class="statchip pending">★ ${esc(r.name)} ${esc(r.title)}</span>`),
+    ...(restCount>0?[`<span class="statchip pending">그 외 ${restCount}명</span>`]:[])
+  ];
+  return `<div class="statsummary">${people.length}/${room.totalCount}명 입력 완료</div>
+    <div class="chiprow">${chips.join('')||'<span class="muted">아직 없어요</span>'}</div>`;
+}
+/* TOP3 순위 카드만 뽑아내는 부분 — 확정/마감 후 간단히 보여줄 때나,
+   추천결과 탭에서 자세히 보여줄 때나 똑같이 써요. */
+function renderTop3Section(room,people){
+  if(!people.length)return {html:'<div class="muted" style="text-align:center;padding:40px 0;">아직 입력한 사람이 없어요</div>',top:[],ok:false};
+  const {top,best,refs,minCount,anyOverlap}=computeTop3(room,people);
+  if(!anyOverlap)return {html:'<div class="muted" style="text-align:center;padding:40px 0;">겹치는 시간이 없어요</div>',top:[],ok:false};
+  // 확정된 상태에서 '일정변경하기'를 눌러 비밀번호를 통과하면 변경 모드가 켜져요 (순위 안에서만 고를 수 있음)
+  const changeMode = !!room.confirmed && App._changeMode===App.code;
+  const confirmedBtns = (room.confirmed && !changeMode) ? `<div class="row" style="gap:8px;justify-content:flex-start;margin-bottom:14px;">
+      <button class="btn btn-ghost btn-sm" data-act="sheetChangeSchedule">일정변경하기</button>
+      <button class="btn btn-ghost btn-sm" data-act="sheetDeleteSchedule">일정삭제하기</button>
+    </div>` : '';
+  if(!top.length){
+    const refList=renderRefList(room,refs,changeMode);
+    const topBtns = confirmedBtns;
+    return {html:`${topBtns}<div class="muted" style="text-align:center;padding:20px 0 8px;">조건(필참자·최소 ${minCount}명)에 맞는 시간이 없어요</div>${refList}`,top:[],refs,ok:true};
+  }
+  if(top[0] && top[0].totalAvail===room.totalCount && !getConfetti(App.code).golden){
+    setConfettiFlag(App.code,'golden');setTimeout(fireConfetti,50);
+  }
+  const cards=top.map((w,i)=>{
+    const golden=w.totalAvail===room.totalCount && w.req===room.required.length;
+    const action = changeMode ? `data-act="selectRank" data-i="${i}"` : `data-act="hlWindow" data-idxs="${w.idxs.join(',')}"`;
+    return `<div class="rankcard r${Math.min(w.rank,3)}" ${action} style="cursor:pointer;">
+      <div class="range"><span class="rbadge">${w.rank}순위</span><span>${dateLabel(w.date)} ${minToHHMM(w.start)}~${minToHHMM(w.end)}</span>${golden?`<span class="ico" style="color:var(--gold-ink);" title="전원 가능">${IC.trophy(16)}</span>`:''}</div>
+      <div class="cond">필참자 ${w.req}/${room.required.length} · 전체 ${w.totalAvail}/${room.totalCount}</div>
+    </div>`;
+  }).join('');
+  App._rankSel=null;
+  const topBtns = confirmedBtns;
+  const changeBar = changeMode ? `<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+    <div class="muted" style="font-size:12.5px;">아래 순위 중에서 변경할 순위를 선택해주세요.</div>
+    <button class="btn btn-primary btn-sm" id="rankChangeBtn" style="width:100%;" data-act="applyRankChange" disabled>순위를 선택해주세요</button>
+    <button class="btn-text" data-act="cancelChange">취소</button>
+  </div>` : '';
+  // 참고 순위는 조건을 충족하는 1~3순위가 하나도 없을 때만 보여줘요
+  const html=`${topBtns}<div style="display:flex;flex-direction:column;gap:10px;">${cards}</div>${changeBar}<div id="rankPanel" style="margin-top:2px;"></div>`;
+  return {html,top,refs,ok:true};
+}
+function renderRefList(room,refs,changeMode){
+  if(!refs||!refs.length)return '';
+  App._refSel=null; // 렌더할 때마다 참고 순위 선택 초기화
+  // 확정 전이거나, 확정 후 변경 모드일 때만 고를 수 있어요
+  const selectable=!room.confirmed || !!changeMode;
+  const cards=refs.map((w,idx)=>{
+    const attrs=selectable?`data-act="selectRef" data-i="${idx}" style="padding:12px 14px;border-style:dashed;cursor:pointer;"`:`style="padding:12px 14px;border-style:dashed;"`;
+    return `<div class="card refcard" ${attrs}>
+      <div class="row between"><b style="font-size:13px;">참고 ${w.refRank}순위 · 더 많이 모이는 시간</b></div>
+      <div style="margin-top:4px;font-weight:700;">${dateLabel(w.date)} ${minToHHMM(w.start)}~${minToHHMM(w.end)}</div>
+      <div class="muted" style="margin-top:3px;font-size:12.5px;">전체 ${w.totalAvail}/${room.totalCount}명 가능${w.missing&&w.missing.length?` · 다만 ${esc(w.missing.join(', '))} 참석이 어려워요`:''}</div>
+    </div>`;
+  }).join('');
+  const btn=selectable?`<button class="btn btn-primary btn-sm" id="refConfirmBtn" style="width:100%;margin-top:4px;" data-act="confirmWithRef" disabled>참고 순위를 선택해주세요</button>${changeMode?`<button class="btn-text" data-act="cancelChange">취소</button>`:''}`:'';
+  return `<div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">${cards}${btn}</div>`;
+}
+function vResults(){
+  const room=App.room,people=App.people;
+  const sec=renderTop3Section(room,people);
+  return sec.html;
+}
+/* 날짜마다 한 줄짜리 가로 타임라인 바 하나로 보여줘요 — 시간대별로 칸이 잔뜩 쌓인
+   표보다, 하루에 한 줄씩이 한눈에 비교하기 훨씬 쉬워서요. */
+
+
+/* ---- 참여 현황 ---- */
+function vStatus(){
+  const room=App.room,people=App.people;
+  const total=room.totalCount,done=people.length;
+  const pct=Math.min(100,Math.round(done/total*100));
+  const full=done>=total;
+  const doneNames=people.map(p=>`${p.name}·${p.title}`);
+  const pendingReq=room.required.filter(r=>r.type==='name'&&!reqJoined(r,people));
+  const restCount=Math.max(0,total-done-pendingReq.length);
+  const link=baseUrl()+'#room='+App.code;
+  const invite=`📅 ${room.name}\n아래 링크를 누르면 바로 들어와서 가능한 시간을 표시할 수 있어요.\n${link}\n(링크가 안 열리면 코드 ${App.code}로 직접 입장해주세요)`;
+  return `
+  <div class="card">
+    <div class="row between"><b>${done}명 중 ${total}명 완료</b><span class="muted">${pct}%</span></div>
+    <div class="progress ${full?'full':''}" style="margin-top:8px;"><b style="width:${pct}%"></b></div>
+  </div>
+  ${(()=>{
+    if(room.confirmed)return '';
+    const isManager = App.me && room.manager && App.me.name===room.manager.name && App.me.title===room.manager.title;
+    if(!full && !isManager)return '';
+    const msg = full
+      ? '모든 인원이 입력을 완료했어요. 이제 일정을 확정할 수 있어요.'
+      : '담당자님, 아직 전원이 입력하진 않았지만 지금 바로 일정을 확정할 수도 있어요.';
+    return `<div class="banner-gold" style="display:flex;flex-direction:column;gap:10px;">
+      <div>${msg}</div>
+      <button class="btn btn-primary btn-sm" style="width:auto;align-self:flex-start;" data-act="sheetConfirm">일정 확정하기</button>
+    </div>`;
+  })()}
+  <div class="card">
+    <div class="sectitle">완료</div>
+    <div class="chiprow" style="margin:8px 0 12px;">${doneNames.length?doneNames.map(n=>`<span class="chip">${esc(n)}</span>`).join(''):'<span class="muted">아직 없어요</span>'}</div>
+    <div class="sectitle">미입력 필참자</div>
+    <div class="chiprow" style="margin-top:8px;">${pendingReq.length?pendingReq.map(r=>`<span class="chip">★ ${esc(r.name)}·${esc(r.title)}</span>`).join(''):'<span class="muted">없어요</span>'}${restCount>0?`<span class="chip">그 외 ${restCount}명</span>`:''}</div>
+  </div>
+  <div class="card">
+    <div class="sectitle">모임 정보</div>
+    <div class="muted" style="margin-top:6px;line-height:1.7;">
+      날짜: ${room.dates.map(d=>dateLabel(d)).join(', ')}<br>
+      시간대: ${minToHHMM(room.timeStart)}~${room.timeEnd===1440?'24:00':minToHHMM(room.timeEnd)}<br>
+      소요 시간: ${Math.floor(room.durationMin/60)}시간 ${room.durationMin%60}분 · 단위 ${room.unit}분<br>
+      마감: ${deadlineText(room)}<br>
+      담당자: ${esc(room.manager.name)} ${esc(room.manager.title)}
+    </div>
+  </div>
+  <button class="btn btn-ghost" data-act="copyInvite" data-code="${App.code}">초대 문구 복사</button>
+  <button class="btn btn-ghost" data-act="copyRemind">재촉 문구 복사</button>
+  `;
+}
+
+/* ============================= 바인딩 & 액션 ============================= */
+function bindGlobal(){
+  document.onclick=async(e)=>{
+    const el=e.target.closest('[data-act]');
+    if(!el)return;
+    bumpNav(); // 어떤 클릭이든 일단 이전에 진행 중이던 비동기 네비게이션(openRoom 등)을 무효화
+    const act=el.getAttribute('data-act');
+    const v=el.getAttribute('data-v');
+    const code=el.getAttribute('data-code');
+    try{
+      if(createActions[act]){await createActions[act](v);return;}
+      if(globalActions[act]){await globalActions[act](el,v,code);return;}
+    }catch(err){
+      console.error('"'+act+'" 처리 중 오류',err);
+      toast('문제가 발생했어요. 다시 시도해주세요.');
+    }
+  };
+}
+const globalActions={
+  goCreate:()=>{resetDraft();setScreen('create');},
+  goHome:()=>goHomeScreen(),
+  goDemo:async()=>{await openRoom('202610');},
+  favRow:async(el)=>{
+    toggleFav(el.getAttribute('data-code'),el.getAttribute('data-name'));
+    await loadHomeMeetings();render();
+  },
+  togglePast:()=>{App.showPast=!App.showPast;render();},
+  leaveAsk:(el,v,code)=>{
+    const name=el.getAttribute('data-name')||'이 모임';
+    openSheet(`<h3>목록에서 나갈까요?</h3>
+      <div class="muted" style="line-height:1.6;"><b style="color:var(--ink);">${esc(name)}</b>이(가) 내 모임 목록에서 사라져요.<br>방과 내가 입력한 가능 시간은 그대로 남고, 코드나 링크로 다시 들어오면 목록에 다시 생겨요.</div>
+      <button class="btn btn-danger" data-act="doLeave" data-code="${esc(code)}">목록에서 나가기</button>
+      <button class="btn-text" data-act="closeSheet">취소</button>`);
+  },
+  doLeave:async(el,v,code)=>{
+    leaveRoomList(code);
+    closeSheet();
+    await loadHomeMeetings();
+    if(App.screen==='home')render();
+    toast('목록에서 나갔어요');
+  },
+  mainTab:(el,v)=>{App.mainTab=v;App.calSelectedDate=null;if(v==='profile')initProfileDraft();render();},
+  calNavMain:(el,v)=>{
+    App.calViewMonth+=(+v);
+    if(App.calViewMonth<0){App.calViewMonth=11;App.calViewYear--;}
+    if(App.calViewMonth>11){App.calViewMonth=0;App.calViewYear++;}
+    render();
+  },
+  calPick:(el,v)=>{App.calSelectedDate=(App.calSelectedDate===v?null:v);render();},
+  weekNav:(el,v)=>{ if(!App.weekRef)App.weekRef=todayISO(); App.weekRef=addDaysISO(App.weekRef,+v); render(); },
+  profDept:(el,v)=>{
+    if(!PD)initProfileDraft();
+    syncDeptText();
+    if(v==='__custom'){
+      PD.deptCustom=!PD.deptCustom;
+      PD.dept = PD.deptCustom ? (PD.deptText||'') : null;
+    }else{
+      PD.deptCustom=false;
+      PD.dept = (PD.dept===v)? null : v;
+    }
+    render();
+  },
+  profRank:(el,v)=>{if(!PD)initProfileDraft();PD.rank=v;render();},
+  editProfile:()=>{initProfileDraft();profileEditMode=true;render();},
+  gotoProfileFromCreate:async()=>{
+    profileEditMode=true;initProfileDraft();App.mainTab='profile';
+    await goHomeScreen();
+  },
+  cancelEditProfile:()=>{profileEditMode=false;PD=null;render();},
+  saveProfile:()=>{
+    if(!PD)initProfileDraft();
+    const nameEl=$('#p_name');
+    if(nameEl)PD.name=nameEl.value.trim();
+    const dcEl=$('#p_dept_custom');
+    if(dcEl)PD.dept=dcEl.value.trim()||null;
+    const errEl=$('#profErr');
+    if(!PD.name){errEl.textContent='이름을 입력해주세요.';return;}
+    if(!PD.rank){errEl.textContent='직급을 선택해주세요.';return;}
+    setMyProfile(PD.name,PD.dept,PD.rank);
+    profileEditMode=false;
+    render();toast('등록했어요. 다음 방부터 자동으로 입력돼요 ✅');
+  },
+  clearProfile:()=>{clearMyProfile();PD=null;profileEditMode=true;render();toast('등록을 해제했어요');},
+  joinRoom:async()=>{
+    const c=$('#joinCode').value.trim();
+    const errEl=$('#joinErr');errEl.innerHTML='';
+    if(!/^\d{6}$/.test(c)){errEl.innerHTML='<div class="err">6자리 숫자 코드를 입력해주세요.</div>';return;}
+    const ok=await openRoom(c);
+    if(!ok)errEl.innerHTML='<div class="err">존재하지 않는 방 코드예요.</div>';
+  },
+  enter:async(el,v,code)=>{await openRoom(code||el.getAttribute('data-code'));},
+  rmFav:(el,v,code)=>{removeFav(code);},
+  rmRecent:(el,v,code)=>{removeRecent(code);},
+  fav:()=>{toggleFav(App.code,App.room.name);render();},
+  theme:()=>{setTheme(getTheme()==='dark'?'light':'dark');render();},
+  copyInvite:(el,v,code)=>{
+    const c=code||App.code;
+    const link=baseUrl()+'#room='+c;
+    const name=App.room?App.room.name:(getFavorites().concat(getRecents()).find(r=>r.code===c)||{}).name||'회의';
+    copyText(`📅 ${name}\n아래 링크를 누르면 바로 들어와서 가능한 시간을 표시할 수 있어요.\n${link}\n(링크가 안 열리면 코드 ${c}로 직접 입장해주세요)`);
+  },
+  copyRemind:()=>{
+    const link=baseUrl()+'#room='+App.code;
+    const r=App.room;
+    const dlLine=(r.deadline&&r.deadline.mode!=='none'&&r.deadline.value)?`투표 마감: ${deadlineText(r)}\n`:'';
+    copyText(`⏰ ${r.name}\n아직 가능한 시간을 입력하지 않으셨다면 체크 부탁드려요 🙏\n${dlLine}${link}`);
+  },
+  tab:(el,v)=>{App.tab=v;App.draft.pendingCells=null;render();},
+  fillId:(el)=>{$('#f_iname').value=el.getAttribute('data-name');$('#f_ititle').value=el.getAttribute('data-title');},
+  checkId:()=>{
+    const name=$('#f_iname').value.trim(),title=$('#f_ititle').value.trim();
+    if(!name||!title){$('#dupMsg').innerHTML='<div class="err">이름과 직급을 모두 입력해주세요.</div>';return;}
+    const exists=App.people.find(p=>p.name===name&&p.title===title);
+    if(exists){
+      $('#dupMsg').innerHTML=`<div class="banner-lock" style="margin-top:8px;">동일 정보가 기입되었습니다.
+        <div class="row" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" data-act="continueEdit" data-name="${esc(name)}" data-title="${esc(title)}">이어서 수정</button>
+        <button class="btn-text" data-act="clearId">다른 이름 선택</button></div></div>`;
+      return;
+    }
+    App.me={name,title};setIdentity(App.code,name,title);render();loadBusy(App.code);
+  },
+  continueEdit:(el)=>{App.me={name:el.getAttribute('data-name'),title:el.getAttribute('data-title')};setIdentity(App.code,App.me.name,App.me.title);render();loadBusy(App.code);},
+  clearId:()=>{$('#f_iname').value='';$('#f_ititle').value='';$('#dupMsg').innerHTML='';},
+  switchId:()=>{App.me=null;App.draft.pendingCells=null;render();},
+  saveInput:async()=>{
+    const person={id:personKey(App.me.name,App.me.title),name:App.me.name,title:App.me.title,cells:App.draft.pendingCells.join('')};
+    const latest=await Store.getPeople(App.code);
+    if(!latest.some(p=>p.id===person.id) && latest.length>=App.room.totalCount){
+      toast('참여 가능 인원이 모두 찼어요.');
+      return;
+    }
+    await Store.setPerson(App.code,person);
+    toast('저장했어요 ✅');
+  },
+  hlWindow:(el)=>{
+    const idxs=el.getAttribute('data-idxs').split(',').map(Number);
+    const panel=$('#rankPanel');
+    if(!panel)return;
+    $$('.rankcard').forEach(c=>c.classList.remove('selected'));
+    $$('.refcard').forEach(c=>c.classList.remove('selected'));
+    App._refSel=null;
+    const rb=$('#refConfirmBtn'); if(rb){rb.disabled=true;rb.textContent='참고 순위를 선택해주세요';}
+    el.classList.add('selected');
+    const bd=windowBreakdown(App.room,App.people,idxs);
+    panel.innerHTML=`<div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px;">
+      <div class="statrow">
+        <div class="statblock ok"><div class="statnum">${bd.avail.length}</div><div class="statlbl">가능인원</div></div>
+        <div class="statblock bad"><div class="statnum">${bd.unavail.length}</div><div class="statlbl">불가능인원</div></div>
+        <div class="statblock pend"><div class="statnum">${bd.notVoted}</div><div class="statlbl">투표미참여</div></div>
+      </div>
+      <div class="muted" style="font-size:12.5px;">가능: ${esc(bd.availText)}</div>
+      ${bd.unavail.length?`<div class="muted" style="font-size:12.5px;">불가능: ${esc(bd.unavailText)}</div>`:''}
+    </div>`;
+  },
+
+  hostMenu:()=>{
+    openSheet(`<h3>방장 메뉴</h3>
+      <button class="btn btn-ghost" data-act="sheetConfirm">${App.room.confirmed?'확정 취소':'일정 확정'}</button>
+      <button class="btn btn-ghost" data-act="sheetSettings">방 설정 수정</button>
+      <button class="btn-text" data-act="closeSheet">닫기</button>`);
+  },
+  closeSheet:()=>closeSheet(),
+  sheetConfirm:()=>{
+    if(App.room.confirmed){askPassword(async()=>{
+      App.room.confirmed=null;await Store.setRoom(App.code,App.room);closeSheet();render();toast('확정을 취소했어요');
+    });return;}
+    askPassword(()=>{ openSchedulePicker('확정할 일정을 선택하세요','이 시간으로 확정'); });
+  },
+  // 일정변경하기 → 비밀번호 → 변경 모드(순위 카드 선택 가능) → 순위 선택 → 일정 변경하기
+  sheetChangeSchedule:()=>{
+    askPassword(()=>{ App._changeMode=App.code; closeSheet(); render(); });
+  },
+  cancelChange:()=>{ App._changeMode=null; render(); },
+  selectRank:(el)=>{
+    const idx=+el.getAttribute('data-i');
+    App._rankSel=idx;
+    $$('.rankcard').forEach(c=>c.classList.remove('selected'));
+    el.classList.add('selected');
+    const {top}=computeTop3(App.room,App.people);
+    const w=top[idx];
+    const btn=$('#rankChangeBtn');
+    if(btn&&w){btn.disabled=false;btn.textContent=`${w.rank}순위로 일정 변경하기`;}
+  },
+  applyRankChange:async()=>{
+    if(App._changeMode!==App.code||App._rankSel==null){toast('변경할 순위를 먼저 선택해주세요');return;}
+    const {top}=computeTop3(App.room,App.people);
+    const w=top[App._rankSel];
+    if(w){await doConfirmInternal(w);}
+  },
+  doConfirm:async(el)=>{
+    const wasConfirmed=!!App.room.confirmed;
+    const w=App._top3[+el.getAttribute('data-i')];
+    const attendees=attendeesForIdxs(App.people,w.idxs).map(p=>({name:p.name,title:p.title}));
+    App.room.confirmed={date:w.date,start:w.start,end:w.end,attendees};
+    await Store.setRoom(App.code,App.room);
+    closeSheet();render();
+    if(!getConfetti(App.code).confirmed){setConfettiFlag(App.code,'confirmed');fireConfetti();}
+    toast(wasConfirmed?'일정을 변경했어요 ✅':'일정을 확정했어요 🎉');
+  },
+  selectRef:(el)=>{
+    const idx=+el.getAttribute('data-i');
+    App._refSel=idx;
+    $$('.refcard').forEach(c=>c.classList.remove('selected'));
+    $$('.rankcard').forEach(c=>c.classList.remove('selected'));
+    el.classList.add('selected');
+    const panel=$('#rankPanel'); if(panel)panel.innerHTML='';
+    const btn=$('#refConfirmBtn');
+    if(btn){
+      const {refs}=computeTop3(App.room,App.people);
+      const w=refs[idx];
+      btn.disabled=false;
+      const vb=App.room.confirmed?'변경':'확정';
+      btn.textContent=w?`참고 ${w.refRank}순위로 일정 ${vb}하기`:`일정 ${vb}하기`;
+    }
+  },
+  confirmWithRef:async()=>{
+    if(App._refSel==null){toast('참고 순위를 먼저 선택해주세요');return;}
+    const idx=App._refSel;
+    const run=async()=>{
+      const {refs}=computeTop3(App.room,App.people);
+      const w=refs[idx];
+      if(w){await doConfirmInternal(w);}
+    };
+    // 변경 모드는 이미 비밀번호를 통과했으니 바로 적용, 처음 확정은 비밀번호 확인
+    if(App.room.confirmed&&App._changeMode===App.code){await run();return;}
+    askPassword(run);
+  },
+  sheetDeleteSchedule:()=>{
+    askPassword(()=>{
+      openSheet(`<h3>일정을 삭제하시겠어요?</h3>
+        <div class="muted" style="line-height:1.6;">확정된 일정이 취소되며, 다시 일정을 확정할 수 있게 돼요.</div>
+        <div class="card" style="margin-top:12px;padding:12px 14px;">
+          <div style="font-weight:700;font-size:15px;">${dateLabel(App.room.confirmed.date)} ${minToHHMM(App.room.confirmed.start)}~${minToHHMM(App.room.confirmed.end)}</div>
+        </div>
+        <button class="btn btn-danger" data-act="doDeleteSchedule">확인: 삭제하기</button>
+        <button class="btn-text" data-act="closeSheet">취소</button>`);
+    });
+  },
+  doDeleteSchedule:async()=>{
+    App.room.confirmed=null;
+    App._changeMode=null;
+    await Store.setRoom(App.code,App.room);
+    closeSheet();render();
+    toast('일정을 삭제했어요');
+  },
+  doConfirmManual:async()=>{
+    const room=App.room;
+    const wasConfirmed=!!room.confirmed;
+    const date=$('#manualDate').value;
+    const start=+$('#manualStart').value;
+    const wl=windowLenOf(room),cpd=cellsPerDayOf(room);
+    const end=start+wl*room.unit;
+    const dIdx=room.dates.indexOf(date),s=(start-room.timeStart)/room.unit;
+    const idxs=[];for(let k=0;k<wl;k++)idxs.push(dIdx*cpd+s+k);
+    const attendees=attendeesForIdxs(App.people,idxs).map(p=>({name:p.name,title:p.title}));
+    room.confirmed={date,start,end,attendees};
+    await Store.setRoom(App.code,room);
+    closeSheet();render();
+    if(!getConfetti(App.code).confirmed){setConfettiFlag(App.code,'confirmed');fireConfetti();}
+    toast(wasConfirmed?'일정을 변경했어요 ✅':'일정을 확정했어요 🎉');
+  },
+  toggleReqPerson:(el)=>{ el.classList.toggle('on'); },
+  sheetSettings:()=>{
+    askPassword(()=>{openSettingsSheet();});
+  }
+};
+/* 참고 순위나 직접 선택으로 일정을 확정하는 내부 함수 */
+async function doConfirmInternal(w){
+  const wasConfirmed=!!App.room.confirmed;
+  const idxs=w.idxs;
+  const attendees=attendeesForIdxs(App.people,idxs).map(p=>({name:p.name,title:p.title}));
+  App.room.confirmed={date:w.date,start:w.start,end:w.end,attendees};
+  App._changeMode=null;
+  await Store.setRoom(App.code,App.room);
+  closeSheet();render();
+  if(!getConfetti(App.code).confirmed){setConfettiFlag(App.code,'confirmed');fireConfetti();}
+  toast(wasConfirmed?'일정을 변경했어요 ✅':'일정을 확정했어요 🎉');
+}
+/* 확정/변경 공통 피커: TOP3 중에서 고르거나, 직접 날짜·시간을 골라요.
+   title/actionLabel만 다르게 줘서 "확정"과 "변경" 양쪽에 같이 써요. */
+function openSchedulePicker(title,actionLabel){
+  const room=App.room;
+  const {top}=computeTop3(room,App.people);
+  App._top3=top;
+  const opts= top.map((w,i)=>`<button class="btn btn-ghost" style="text-align:left;height:auto;white-space:normal;display:block;" data-act="doConfirm" data-i="${i}">
+      <div style="font-weight:700;">${w.rank}순위 · ${dateLabel(w.date)} ${minToHHMM(w.start)}~${minToHHMM(w.end)}</div>
+      <div class="muted" style="margin-top:3px;font-weight:400;">참여: ${esc(attendeeNamesText(room,App.people,w.idxs))}</div>
+    </button>`).join('');
+  const wl=windowLenOf(room),cpd=cellsPerDayOf(room);
+  let startOpts='';
+  for(let s=0;s+wl<=cpd;s++){ const t=room.timeStart+s*room.unit; startOpts+=`<option value="${t}">${minToHHMM(t)}~${minToHHMM(t+wl*room.unit)}</option>`; }
+  openSheet(`<h3>${esc(title)}</h3>
+    ${opts||'<div class="muted">추천 결과가 없어요</div>'}
+    <hr class="sep">
+    <div class="sectitle">또는 직접 선택</div>
+    <div class="row">
+      <select id="manualDate">${room.dates.map(d=>`<option value="${d}">${dateLabel(d)}</option>`).join('')}</select>
+      <select id="manualStart">${startOpts}</select>
+    </div>
+    <div id="manualPreview" class="muted" style="margin-top:6px;"></div>
+    <button class="btn btn-ghost" data-act="doConfirmManual">${esc(actionLabel)}</button>
+    <button class="btn-text" data-act="closeSheet">닫기</button>`);
+  const manualIdxs=()=>{
+    const date=$('#manualDate').value,start=+$('#manualStart').value;
+    const dIdx=room.dates.indexOf(date),s=(start-room.timeStart)/room.unit;
+    const idxs=[];for(let k=0;k<wl;k++)idxs.push(dIdx*cpd+s+k);
+    return idxs;
+  };
+  const updatePreview=()=>{ $('#manualPreview').textContent='참여: '+attendeeNamesText(room,App.people,manualIdxs()); };
+  $('#manualDate').onchange=updatePreview;
+  $('#manualStart').onchange=updatePreview;
+  updatePreview();
+}
+function openSheet(html){
+  closeSheet();
+  const ov=document.createElement('div');ov.className='overlay';ov.id='overlay';
+  ov.innerHTML=`<div class="sheet">${html}</div>`;
+  ov.onclick=(e)=>{if(e.target===ov)closeSheet();};
+  document.body.appendChild(ov);
+}
+function closeSheet(){const o=$('#overlay');if(o)o.remove();}
+function askPassword(onOk){
+  openSheet(`<h3>방장 비밀번호</h3>
+    <input type="password" id="pwInput" class="field" style="border:1px solid var(--line-strong);background:var(--bg-elev);color:var(--ink);border-radius:8px;padding:11px 12px;">
+    <div id="pwErr" class="err"></div>
+    <button class="btn btn-primary" id="pwOk">확인</button>
+    <button class="btn-text" data-act="closeSheet">취소</button>`);
+  $('#pwOk').onclick=async()=>{
+    const v=$('#pwInput').value;
+    const h=await sha256Hex(v);
+    if(h===App.room.pwHash){onOk();}
+    else $('#pwErr').textContent='비밀번호가 올바르지 않아요.';
+  };
+}
+function openSettingsSheet(){
+  const room=App.room;const locked=App.people.length>0;
+  const peopleToggles=App.people.map(p=>{
+    const isManager=room.manager && room.manager.name===p.name && room.manager.title===p.title;
+    const on=isReqPerson(room,p);
+    return `<button type="button" class="chip reqToggle ${on?'on':''}" data-name="${esc(p.name)}" data-title="${esc(p.title)}" ${isManager?'disabled':''} data-act="${isManager?'':'toggleReqPerson'}">${esc(p.name)} · ${esc(p.title)}${isManager?' (담당자)':''}</button>`;
+  }).join('');
+  openSheet(`<h3>방 설정 수정</h3>
+    <div class="field"><label>모임 이름</label><input type="text" id="s_name" value="${esc(room.name)}"></div>
+    <div class="field"><label>세부내용</label><input type="text" id="s_details" value="${esc(room.details||'')}"></div>
+    <div class="field"><label>총 인원</label><input type="number" id="s_total" min="${Math.max(room.required.length,App.people.length)}" value="${room.totalCount}"></div>
+    <div class="field"><label>최소 참석 인원 <span style="font-weight:400;color:var(--ink-faint);">비우면 과반</span></label><input type="number" id="s_min" min="1" placeholder="자동 (과반)" value="${room.minCount==null?'':room.minCount}"></div>
+    <div class="field"><label>시작 시각 ${locked?'(입력자가 있어 수정 불가)':''}</label><select id="s_tstart" ${locked?'disabled':''}>${timeOptions(room.timeStart)}</select></div>
+    <div class="field"><label>시간 단위 ${locked?'(입력자가 있어 수정 불가)':''}</label><select id="s_unit" ${locked?'disabled':''}>${(room.unit===45?[15,30,45,60]:[15,30,60]).map(u=>`<option value="${u}" ${room.unit===u?'selected':''}>${u}분</option>`).join('')}</select></div>
+    <div class="field">
+      <label>필참자 (링크로 들어온 사람 중 선택)</label>
+      <div style="display:flex;flex-direction:column;">
+        ${peopleToggles||'<div class="muted">아직 들어온 사람이 없어요. 링크로 들어오면 여기서 필참으로 지정할 수 있어요.</div>'}
+      </div>
+    </div>
+    <div class="field">
+      <label>투표 마감</label>
+      <div class="row">
+        <input type="date" id="s_deadline" min="${todayISO()}" value="${(room.deadline&&room.deadline.mode!=='none'&&room.deadline.value)?room.deadline.value.slice(0,10):defaultDeadline()}" ${(room.deadline&&room.deadline.mode!=='none')?'':'disabled'} style="flex:1;border:1px solid var(--line-strong);background:var(--bg-elev);color:var(--ink);border-radius:var(--radius-sm);padding:11px 12px;">
+        <label class="row" style="gap:4px;font-size:13px;font-weight:500;white-space:nowrap;"><input type="checkbox" id="s_noDeadline" ${(room.deadline&&room.deadline.mode!=='none')?'':'checked'} onchange="document.getElementById('s_deadline').disabled=this.checked"> 마감 없음</label>
+      </div>
+      <div class="muted">선택한 날 밤 23:59까지 입력할 수 있어요. 마감이 지난 방도 날짜를 늦추면 다시 열려요.</div>
+    </div>
+    <div class="field"><label>새 비밀번호 (변경 시에만 입력)</label><input type="password" id="s_pw"></div>
+    <div id="setErr" class="err"></div>
+    <button class="btn btn-primary" data-act="saveSettings">저장</button>
+    <button class="btn-text" data-act="closeSheet">취소</button>`);
+}
+globalActions.saveSettings=async()=>{
+  const room=App.room;
+  const name=$('#s_name').value.trim();
+  const total=+$('#s_total').value;
+  const errEl=$('#setErr');
+  if(!name){errEl.textContent='모임 이름을 입력해주세요.';return;}
+  if(total<Math.max(room.required.length,App.people.length)){errEl.textContent='총 인원이 너무 적어요.';return;}
+  const noDl=$('#s_noDeadline').checked;
+  const dlVal=$('#s_deadline').value;
+  if(!noDl){
+    if(!dlVal){errEl.textContent='투표 마감일을 선택해주세요.';return;}
+    if(cmpDate(dlVal,todayISO())<0){errEl.textContent='투표 마감일이 오늘보다 이전이에요.';return;}
+  }
+  const newPwCheck=$('#s_pw').value;
+  if(newPwCheck && newPwCheck.length<4){errEl.textContent='새 비밀번호는 4자 이상이어야 해요.';return;}
+  room.deadline= noDl?{mode:'none',value:null}:{mode:'manual',value:dlVal};
+  room.name=name;room.details=$('#s_details').value;room.totalCount=total;
+  { const mv=($('#s_min')||{}).value; room.minCount=(mv===''||mv==null)?null:Math.min(total,Math.max(1,parseInt(mv,10)||1)); }
+  if(!App.people.length){room.timeStart=+$('#s_tstart').value;room.unit=+$('#s_unit').value;}
+  /* 필참자 갱신: 담당자는 항상 유지, 직급전용 항목은 그대로 두고,
+     링크로 들어온 사람 토글칩 선택 결과를 이름 지정 항목으로 반영해요. */
+  const titleOnly=room.required.filter(r=>r.type==='title');
+  const managerReq={type:'name',name:room.manager.name,title:room.manager.title};
+  const checked=$$('.reqToggle.on').map(c=>({type:'name',name:c.getAttribute('data-name'),title:c.getAttribute('data-title')}));
+  const seen=new Set([managerReq.name+'|'+managerReq.title]);
+  const nameReqs=[managerReq];
+  checked.forEach(r=>{ const k=r.name+'|'+r.title; if(!seen.has(k)){seen.add(k);nameReqs.push(r);} });
+  /* 아직 방에 들어오지 않은 이름 지정 필참자는 체크박스가 없으니, 지우지 말고 그대로 유지해요 */
+  room.required.filter(r=>r.type==='name'&&!reqJoined(r,App.people)).forEach(r=>{ const k=r.name+'|'+r.title; if(!seen.has(k)){seen.add(k);nameReqs.push(r);} });
+  room.required=[...nameReqs,...titleOnly];
+  const newPw=$('#s_pw').value;
+  if(newPw){ if(newPw.length<4){errEl.textContent='새 비밀번호는 4자 이상이어야 해요.';return;} room.pwHash=await sha256Hex(newPw); }
+  await Store.setRoom(App.code,room);
+  closeSheet();render();toast('설정을 저장했어요');
+};
+
+/* ---------- 그리드 상호작용 (저장, 드래그) ---------- */
+function afterRoomRender(){
+  const grid=$('#gridWrap');
+  if(grid && App.draft && App.draft.pendingCells){
+    let painting=false,paintVal=null;
+    const dragOn=()=>$('#dragToggle')&&$('#dragToggle').checked;
+    function setCell(idx,val){App.draft.pendingCells[idx]=val?'1':'0';const c=$(`.cell[data-idx="${idx}"]`,grid);if(c)c.classList.toggle('on',val);}
+    grid.onmousedown=(e)=>{const c=e.target.closest('.cell');if(!c)return;painting=true;const idx=+c.getAttribute('data-idx');paintVal=App.draft.pendingCells[idx]!=='1';setCell(idx,paintVal);};
+    grid.onmouseover=(e)=>{if(!painting)return;const c=e.target.closest('.cell');if(!c)return;setCell(+c.getAttribute('data-idx'),paintVal);};
+    window.onmouseup=()=>{painting=false;};
+    grid.ontouchstart=(e)=>{
+      const c=e.target.closest('.cell');if(!c)return;
+      const idx=+c.getAttribute('data-idx');
+      if(dragOn()){painting=true;paintVal=App.draft.pendingCells[idx]!=='1';setCell(idx,paintVal);e.preventDefault();}
+      else{setCell(idx,App.draft.pendingCells[idx]!=='1');}
+    };
+    grid.ontouchmove=(e)=>{
+      if(!painting||!dragOn())return;
+      e.preventDefault();
+      const t=e.touches[0];const el=document.elementFromPoint(t.clientX,t.clientY);
+      const c=el&&el.closest('.cell');if(!c)return;
+      setCell(+c.getAttribute('data-idx'),paintVal);
+    };
+    grid.ontouchend=()=>{painting=false;};
+    const dt=$('#dragToggle');if(dt)dt.onchange=e=>LS.set('cimo:dragToggle',e.target.checked);
+    if(App.room.timeStart===0){
+      const rowH=26;const target=Math.max(0,(9*60-App.room.timeStart)/App.room.unit*rowH-40);
+      grid.scrollTop=target;
+    }
+  }
+}
+
+/* ---------- 컨페티 ---------- */
+function fireConfetti(){
+  if(reduceMotion())return;
+  const host=$('#confetti-canvas');host.innerHTML='';
+  const canvas=document.createElement('canvas');host.appendChild(canvas);
+  canvas.width=innerWidth;canvas.height=innerHeight;
+  const ctx=canvas.getContext('2d');
+  const colors=['#FF6A2B','#D9A62A','#2F9E5B','#4F8DD9','#D94F4F'];
+  let parts=Array.from({length:110},()=>({x:Math.random()*canvas.width,y:-20-Math.random()*200,vx:(Math.random()-0.5)*4,vy:2+Math.random()*3,r:4+Math.random()*4,c:colors[Math.floor(Math.random()*colors.length)],rot:Math.random()*360,vr:(Math.random()-0.5)*10}));
+  let f=0;
+  (function tick(){
+    f++;ctx.clearRect(0,0,canvas.width,canvas.height);
+    parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.05;p.rot+=p.vr;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot*Math.PI/180);ctx.fillStyle=p.c;ctx.fillRect(-p.r/2,-p.r/2,p.r,p.r*0.6);ctx.restore();});
+    if(f<140)requestAnimationFrame(tick);else host.innerHTML='';
+  })();
+}
+
+/* ============================= 초기화 ============================= */
+async function init(){
+  applyTheme();
+  await initCaps();
+  await seedDemo();
+  const m=location.hash.match(/room=(\d{6})/);
+  if(m){
+    /* 초대 링크로 들어온 경우: 브랜드 스플래시로 붙잡지 않고 바로 투표 화면으로 — 
+       한 번이라도 더 끊기면 그만큼 안 들어오고 이탈할 수 있어서, 여기는 0초가 맞아요. */
+    $('#splash').style.display='none';
+    await openRoom(m[1]);
+    return;
+  }
+  const skip=reduceMotion();
+  setTimeout(async()=>{ $('#splash').style.display='none'; await goHomeScreen(); }, skip?600:2400);
+}
+init();
+</script>
+</body>
+</html>
