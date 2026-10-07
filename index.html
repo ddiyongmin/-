@@ -281,6 +281,20 @@ table.timetable th,table.timetable td{border:none;}
 .wk-day{flex:1; position:relative; border-right:1px solid var(--line); border-left:1px solid var(--line); margin-left:-1px;}
 .wk-day.today{background:var(--brand-bg);}
 .wk-block{position:absolute; left:2px; right:2px; border-radius:5px; padding:3px 4px; overflow:hidden; cursor:default; box-shadow:0 1px 2px rgba(0,0,0,.15);}
+.wk-block.absent{background:repeating-linear-gradient(135deg,var(--line-strong) 0 3px,var(--bg-sunk) 3px 7px) !important; box-shadow:none;}
+.wk-block.absent .wk-block-name{color:var(--ink-soft);}
+.wk-block.pending{background:var(--bg-elev) !important; border:1.5px dashed var(--wkc); box-shadow:none;}
+.wk-block.pending .wk-block-name{color:var(--wkc);}
+.wk-tag{display:block; font-size:8.5px; font-weight:800; margin-bottom:1px;}
+.mstat{display:inline-flex; align-items:center; font-size:11px; font-weight:700; border-radius:999px; padding:2px 8px; margin-left:6px; white-space:nowrap; vertical-align:1px;}
+.mstat.attend{background:var(--brand-bg); color:var(--brand-ink);}
+.mstat.absent{background:var(--bg-sunk); color:var(--ink-faint); text-decoration:line-through;}
+.mstat.pending{border:1.5px dashed var(--gold); color:var(--gold-ink);}
+.onlymine{display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; background:var(--bg-elev); border:1px solid var(--line); border-radius:var(--radius); padding:11px 14px; font-size:13.5px; font-weight:600; color:var(--ink); cursor:pointer;}
+.onlymine .tr{width:38px; height:22px; border-radius:999px; background:var(--line-strong); position:relative; flex-shrink:0; transition:background .15s;}
+.onlymine .tr::after{content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; transition:transform .15s; box-shadow:0 1px 2px rgba(0,0,0,.2);}
+.onlymine.on .tr{background:var(--brand);}
+.onlymine.on .tr::after{transform:translateX(16px);}
 .wk-block-name{font-size:9.5px; color:#fff; font-weight:800; line-height:1.25; word-break:keep-all;}
 .rankcard .range{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
 .rbadge{font-size:12px; font-weight:900; padding:2px 9px; border-radius:999px; background:var(--brand); color:#fff;}
@@ -834,8 +848,8 @@ async function loadBusy(code){
       const myKeys=new Set(keys);
       const id=getIdentity(c); if(id)myKeys.add(personKey(id.name,id.title));
       if(!myKeys.size)continue;
-      let mine = !!(r.manager && myKeys.has(personKey(r.manager.name,r.manager.title)));
-      if(!mine){ const ps=await Store.getPeople(c); mine=ps.some(p=>myKeys.has(personKey(p.name,p.title))); }
+      /* 내가 참석하는 확정 회의만 '이미 일정 있음'으로 표시해요(불참·미응답 회의는 실제로 비어 있는 시간) */
+      const mine = myConfirmedStatus(c,r,await Store.getPeople(c))==='attend';
       if(mine)out.push({code:c,name:r.name||'다른 회의',date:r.confirmed.date,start:r.confirmed.start,end:r.confirmed.end});
     }
     if(App.screen!=='room'||App.code!==code)return; // 그 사이 다른 화면으로 이동함
@@ -950,6 +964,43 @@ function renderRoomBody(){
 }
 
 /* ---------- 홈 : 내 모임 ---------- */
+/* ===== 확정된 모임에서 '나'의 상태 =====
+   이 기기의 '나' = 내 정보 프로필 + 그 방에서 입력할 때 쓴 이름·직급 (이름 + 직급으로 비교)
+   attend(참석): 확정 시간에 가능하다고 한 사람 / absent(불참): 투표했지만 그 시간은 불가능
+   pending(미응답): 아직 투표하지 않았거나, 이 기기에서 누구인지 알 수 없음 */
+function myIdsFor(code){
+  const ids=[];const gp=getMyProfile();
+  if(profileValid(gp))ids.push({name:gp.name,rank:gp.rank});
+  const id=getIdentity(code); if(id&&id.name)ids.push({name:id.name,rank:rankOf(id.title||'')});
+  return ids;
+}
+function isMeIn(ids,x){return !!x && ids.some(m=>m.name===x.name&&m.rank===rankOf(x.title||''));}
+function confirmedIdxsOf(room){
+  const c=room.confirmed;if(!c)return null;
+  const cpd=cellsPerDayOf(room),dIdx=room.dates.indexOf(c.date),st=Math.round((c.start-room.timeStart)/room.unit);
+  if(dIdx<0||st<0)return null;
+  const wl=Math.max(1,Math.ceil((c.end-c.start)/room.unit)),a=[];for(let k=0;k<wl;k++)a.push(dIdx*cpd+st+k);return a;
+}
+function myConfirmedStatus(code,room,people){
+  const ids=myIdsFor(code);
+  if(!ids.length)return 'pending';
+  const me=(people||[]).find(p=>isMeIn(ids,p));
+  if(!me)return 'pending';
+  const att=room.confirmed&&room.confirmed.attendees;
+  if(att)return att.some(a=>isMeIn(ids,a))?'attend':'absent';
+  const idxs=confirmedIdxsOf(room);
+  if(!idxs)return 'attend';
+  return idxs.every(i=>me.cells&&me.cells[i]==='1')?'attend':'absent';
+}
+const MSTAT_LABEL={attend:'참석',absent:'불참',pending:'미응답'};
+function mstatBadge(st){return st?`<span class="mstat ${st}">${MSTAT_LABEL[st]}</span>`:'';}
+function onlyMineOn(){return !!LS.get('cimo:onlyMine',false);}
+/* "내가 참석하는 일정만 보기"가 켜져 있으면 확정된 모임 중 참석하는 것만 남겨요 */
+function visibleConfirmed(item){return !onlyMineOn() || item.myStatus==='attend';}
+function onlyMineToggle(){
+  const on=onlyMineOn();
+  return `<button class="onlymine ${on?'on':''}" data-act="toggleOnlyMine" aria-pressed="${on}"><span>내가 참석하는 일정만 보기</span><span class="tr"></span></button>`;
+}
 async function loadHomeMeetings(){
   const favs=getFavorites(),recents=getRecents();
   const map=new Map();
@@ -967,9 +1018,11 @@ async function loadHomeMeetings(){
       status = isLocked(room) ? 'past':'ongoing';
       sortDate = (room.dates&&room.dates.length)? room.dates.slice().sort()[0]: null;
     }
-    items.push({code,name:room.name||name,fav:isFav(code),room,status,sortDate});
+    let myStatus=null;
+    if(room.confirmed){ try{ myStatus=myConfirmedStatus(code,room,await Store.getPeople(code)); }catch(e){ myStatus='pending'; } }
+    items.push({code,name:room.name||name,fav:isFav(code),room,status,sortDate,myStatus});
   }
-  items.sort((a,b)=>cmpDate(a.sortDate||'9999-12-31',b.sortDate||'9999-12-31'));
+  items.sort((a,b)=>cmpDate(a.sortDate||'9999-12-31',b.sortDate||'9999-12-31') || ((a.room.confirmed?a.room.confirmed.start:9999)-(b.room.confirmed?b.room.confirmed.start:9999)));
   App.homeMeetings={
     loading:false,
     upcoming:items.filter(i=>i.status==='upcoming'),
@@ -1001,7 +1054,7 @@ function heroCard(item){
   return `<div class="card" style="display:flex;gap:14px;align-items:center;cursor:pointer;" data-act="enter" data-code="${item.code}">
     ${dayBadge(item.sortDate)}
     <div style="flex:1;min-width:0;">
-      <div class="muted" style="font-size:12px;">다음 모임</div>
+      <div class="muted" style="font-size:12px;">다음 모임${item.myStatus&&item.myStatus!=='attend'?mstatBadge(item.myStatus):''}</div>
       <div style="font-weight:700;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(item.name)} <span style="color:var(--ink-soft);font-weight:500;">${minToHHMM(c.start)}</span></div>
     </div>
     <span style="color:var(--ink-faint);font-size:18px;">›</span>
@@ -1011,7 +1064,7 @@ function meetingRow(item){
   const {code,name,fav,room,sortDate}=item;
   let meta;
   if(room.confirmed){
-    meta=`${dateLabel(sortDate)} ${minToHHMM(room.confirmed.start)}~${minToHHMM(room.confirmed.end)}`;
+    meta=`${dateLabel(sortDate)} ${minToHHMM(room.confirmed.start)}~${minToHHMM(room.confirmed.end)}${mstatBadge(item.myStatus)}`;
   }else{
     meta = (room.deadline&&room.deadline.mode!=='none') ? ('마감 '+dateLabel(room.deadline.value.slice(0,10))) : '마감 없음';
   }
@@ -1061,7 +1114,7 @@ function vMeetingsTab(){
       <h1 style="margin:0;font-size:22px;font-weight:900;">내 모임</h1>
       <button class="btn btn-primary btn-sm" style="width:auto;" data-act="goCreate">+ 만들기</button>
     </div>
-    ${upcoming.length? heroCard(upcoming[0]):''}
+    ${(()=>{const nx=upcoming.find(i=>i.myStatus!=='absent'&&visibleConfirmed(i));return nx?heroCard(nx):'';})()}
     <hr class="sep">
     <div class="sectitle" style="padding:0 2px;">진행 중인 조율</div>
     <div style="display:flex;flex-direction:column;gap:2px;">
@@ -1085,8 +1138,8 @@ function vMeetingsTab(){
 function buildCalendarMarks(hm){
   const map={};
   function add(date,item,kind){ if(!date)return; (map[date]=map[date]||[]).push(Object.assign({},item,{kind})); }
-  hm.upcoming.forEach(i=>add(i.sortDate,i,'confirmed'));
-  hm.past.forEach(i=>add(i.sortDate,i,'past'));
+  hm.upcoming.filter(visibleConfirmed).forEach(i=>add(i.sortDate,i,'confirmed'));
+  hm.past.filter(i=>!i.room.confirmed||visibleConfirmed(i)).forEach(i=>add(i.sortDate,i,'past'));
   hm.ongoing.forEach(i=>{ (i.room.dates||[]).forEach(d=>add(d,i,'candidate')); });
   return map;
 }
@@ -1109,7 +1162,7 @@ function calendarDayRow(item){
     : '조율 중';
   return `<div class="roomitem" style="cursor:default;">
     <div style="flex:1;min-width:0;">
-      <div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(name)}</div>
+      <div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${item.myStatus==='absent'?'color:var(--ink-faint);':''}">${esc(name)}${hasTime?mstatBadge(item.myStatus):''}</div>
       ${hasTime?'':`<div class="muted" style="font-size:11.5px;margin-top:1px;">${(room.deadline&&room.deadline.mode!=='none')?('마감 '+dateLabel(room.deadline.value.slice(0,10))):'마감 없음'}</div>`}
     </div>
     <div class="disp" style="font-size:13px;font-weight:700;white-space:nowrap;margin-left:8px;color:${hasTime?'var(--ink)':'var(--ink-faint)'};">${timeTxt}</div>
@@ -1135,7 +1188,7 @@ function vWeekTab(){
   const days=[];for(let i=0;i<7;i++)days.push(addDaysISO(monday,i));
   const byDate={};
   let any=false;
-  hm.upcoming.concat(hm.past).forEach(item=>{
+  hm.upcoming.concat(hm.past).filter(visibleConfirmed).forEach(item=>{
     const c=item.room&&item.room.confirmed;
     if(c&&days.includes(c.date)){(byDate[c.date]=byDate[c.date]||[]).push(item);any=true;}
   });
@@ -1152,7 +1205,8 @@ function vWeekTab(){
       const top=Math.max(0,(c.start-minMin)/totalMin*100);
       const h=Math.max(3,(Math.min(maxMin,c.end)-Math.max(minMin,c.start))/totalMin*100);
       const bg=colorForCode(it.code);
-      return `<div class="wk-block" style="top:${top}%;height:${h}%;background:${bg};" title="${esc(it.name)} ${minToHHMM(c.start)}~${minToHHMM(c.end)}"><div class="wk-block-name">${esc(it.name)}</div></div>`;
+      const st=it.myStatus||'attend';
+      return `<div class="wk-block ${st}" style="top:${top}%;height:${h}%;background:${bg};--wkc:${bg};" title="${esc(it.name)} ${minToHHMM(c.start)}~${minToHHMM(c.end)} (${MSTAT_LABEL[st]})"><div class="wk-block-name">${st!=='attend'?`<span class="wk-tag">${MSTAT_LABEL[st]}</span>`:''}${esc(it.name)}</div></div>`;
     }).join('');
     return `<div class="wk-day ${d===today?'today':''}">${blocks}</div>`;
   }).join('');
@@ -1167,6 +1221,7 @@ function vWeekTab(){
       <b style="font-size:14px;">${monday.slice(5).replace('-','/')} ~ ${days[6].slice(5).replace('-','/')}</b>
       <button class="iconbtn" data-act="weekNav" data-v="7">›</button>
     </div>
+    ${onlyMineToggle()}
     <div class="card" style="padding:8px 10px 12px;">
       <div class="wk-headrow"><div class="wk-hourcol"></div><div class="wk-headdays">${dayHeads}</div></div>
       <div class="wk-wrap" style="height:${heightPx}px;">
@@ -1174,7 +1229,7 @@ function vWeekTab(){
         <div class="wk-days">${dayCols}</div>
       </div>
     </div>
-    ${!any?'<div class="muted" style="text-align:center;padding:10px 0;">이번 주에 확정된 모임이 없어요</div>':''}
+    ${!any?`<div class="muted" style="text-align:center;padding:10px 0;">${onlyMineOn()?'이번 주에 내가 참석하는 모임이 없어요':'이번 주에 확정된 모임이 없어요'}</div>`:'<div class="muted" style="font-size:11.5px;padding:0 2px;">색 블록은 참석, 점선은 미응답, 빗금은 불참이에요.</div>'}
   </div>`;
 }
 function vCalendarTab(){
@@ -1194,8 +1249,15 @@ function vCalendarTab(){
     const sel=App.calSelectedDate===iso;
     let dot='';
     if(has&&has.length){
-      const color=has.some(x=>x.kind==='confirmed')?'var(--gold)':(has.some(x=>x.kind==='candidate')?'var(--brand)':'var(--ink-faint)');
-      dot=`<span style="position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:${color};"></span>`;
+      /* 점 우선순위: 참석(금색) > 미응답(금색 테두리) > 조율 중(주황) > 불참(회색 테두리) > 지난 모임(회색) */
+      const conf=has.filter(x=>x.kind==='confirmed');
+      let st;
+      if(conf.some(x=>x.myStatus==='attend'))st='background:var(--gold);';
+      else if(conf.some(x=>x.myStatus==='pending'))st='background:transparent;border:1.5px solid var(--gold);';
+      else if(has.some(x=>x.kind==='candidate'))st='background:var(--brand);';
+      else if(conf.length)st='background:transparent;border:1.5px solid var(--ink-faint);';
+      else st='background:var(--ink-faint);';
+      dot=`<span style="position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:6px;height:6px;border-radius:50%;box-sizing:border-box;${st}"></span>`;
     }
     cells+=`<div class="cal-day ${sel?'sel':''} ${iso===today?'today':''}" style="position:relative;" data-act="calPick" data-v="${iso}">${d}${dot}</div>`;
   }
@@ -1206,8 +1268,11 @@ function vCalendarTab(){
       <div class="cal-head"><button class="iconbtn" data-act="calNavMain" data-v="-1">‹</button><b>${y}년 ${m+1}월</b><button class="iconbtn" data-act="calNavMain" data-v="1">›</button></div>
       <div class="cal-grid">${DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('')}${cells}</div>
     </div>
-    <div class="row" style="gap:14px;padding:2px;font-size:11.5px;color:var(--ink-soft);">
-      <span class="row" style="gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--gold);display:inline-block;"></span>확정</span>
+    ${onlyMineToggle()}
+    <div class="row" style="gap:10px 14px;padding:2px;font-size:11.5px;color:var(--ink-soft);flex-wrap:wrap;">
+      <span class="row" style="gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--gold);display:inline-block;"></span>참석</span>
+      <span class="row" style="gap:4px;"><span style="width:7px;height:7px;border-radius:50%;border:1.5px solid var(--gold);box-sizing:border-box;display:inline-block;"></span>미응답</span>
+      <span class="row" style="gap:4px;"><span style="width:7px;height:7px;border-radius:50%;border:1.5px solid var(--ink-faint);box-sizing:border-box;display:inline-block;"></span>불참</span>
       <span class="row" style="gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--brand);display:inline-block;"></span>조율 중</span>
       <span class="row" style="gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--ink-faint);display:inline-block;"></span>지난 모임</span>
     </div>
@@ -1831,6 +1896,7 @@ const globalActions={
     render();
   },
   calPick:(el,v)=>{App.calSelectedDate=(App.calSelectedDate===v?null:v);render();},
+  toggleOnlyMine:()=>{LS.set('cimo:onlyMine',!onlyMineOn());render();},
   weekNav:(el,v)=>{ if(!App.weekRef)App.weekRef=todayISO(); App.weekRef=addDaysISO(App.weekRef,+v); render(); },
   profDept:(el,v)=>{
     if(!PD)initProfileDraft();
