@@ -441,7 +441,7 @@ function getIdentity(code){return LS.get('cimo:id:'+code,null);}
 function setIdentity(code,name,title){LS.set('cimo:id:'+code,{name,title});}
 /* 내 정보에 등록해두는 전역 프로필 — 설정해두면 어느 방에 들어가든 이름·직급을 다시 입력하지 않아도 돼요 */
 function getMyProfile(){return LS.get('cimo:myProfile',null);}
-function setMyProfile(name,dept,rank){LS.set('cimo:myProfile',{name:(name||'').trim(),dept,rank});}
+function setMyProfile(name,dept,rank){LS.set('cimo:myProfile',{name:(name||'').trim(),dept,rank,savedAt:Date.now()});}
 function clearMyProfile(){LS.set('cimo:myProfile',null);}
 function profileTitle(gp){if(!gp||!gp.rank)return '';return gp.dept?(gp.dept+' · '+gp.rank):gp.rank;}
 const DEPTS=['CM','TMT','IME','FS'];
@@ -848,7 +848,7 @@ function computeTop3(room,people){
   }
   refs.forEach((w,i)=>{ w.refRank=i+1; w.missing=missingReqs(room,people,w.idxs); });
   const anyOverlap=out.some(w=>w.totalAvail>0);
-  return {top,best:elig[0]||null,refs,minCount,anyOverlap};
+  return {top,best:elig[0]||null,refs,minCount,anyOverlap,all:out};
 }
 
 /* 마감일만 지정된 경우(YYYY-MM-DD)에는 그날 하루가 끝나는 시점(다음 날 00:00)에 잠가요.
@@ -1500,6 +1500,7 @@ function vProfileTab(){
         <div style="font-size:17px;font-weight:800;">${esc(gp.name)}</div>
         <div class="muted" style="margin-top:3px;">${esc(profileTitle(gp))}</div>
       </div>
+      <div class="muted" style="font-size:11.5px;">${gp.savedAt?('이 기기에 '+new Date(gp.savedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+'에 등록됨'):'이 기기에 등록됨 (등록 시각 기록 없음)'}</div>
       <div class="row" style="gap:8px;justify-content:center;">
         <button class="btn btn-ghost btn-sm" data-act="editProfile">수정</button>
         <button class="btn btn-ghost btn-sm" style="color:var(--danger);" data-act="sheetDeleteProfile">삭제</button>
@@ -2060,16 +2061,55 @@ const globalActions={
   leaveAsk:(el,v,code)=>{
     const name=el.getAttribute('data-name')||'이 모임';
     openSheet(`<h3>목록에서 나갈까요?</h3>
-      <div class="muted" style="line-height:1.6;"><b style="color:var(--ink);">${esc(name)}</b>이(가) 내 모임 목록에서 사라져요.<br>방과 내가 입력한 가능 시간은 그대로 남고, 코드나 링크로 다시 들어오면 목록에 다시 생겨요.</div>
-      <button class="btn btn-danger" data-act="doLeave" data-code="${esc(code)}">목록에서 나가기</button>
+      <div class="muted" style="line-height:1.7;"><b style="color:var(--ink);">${esc(name)}</b>이(가) 내 모임 목록에서 사라지고, <b style="color:var(--ink);">내가 입력한 가능 시간도 함께 삭제돼요.</b><br>
+      · 참여 현황과 추천 순위가 내가 빠진 기준으로 다시 계산돼요<br>
+      · 이미 확정된 일정이라도 내가 빠져서 확정 조건이 깨지면 "진행 중인 조율"로 돌아가요<br>
+      · 내가 방장이면 방은 그대로 남고 내 목록에서만 사라져요</div>
+      <button class="btn btn-danger" data-act="doLeave" data-code="${esc(code)}">나가기</button>
       <button class="btn-text" data-act="closeSheet">취소</button>`);
   },
   doLeave:async(el,v,code)=>{
-    leaveRoomList(code);
+    let msg='목록에서 나갔어요';
+    try{
+      const room=await Store.getRoom(code);
+      if(room){
+        const ids=myIdsFor(code);
+        const host=!!room.manager && isMeIn(ids,room.manager);
+        if(host){
+          msg='목록에서 나갔어요. 방은 그대로 남아 있어요';
+        }else{
+          const people=await Store.getPeople(code);
+          const mine=people.filter(x=>isMeIn(ids,x));
+          for(const m of mine)await Store.removePerson(code,m.id);
+          if(mine.length)msg='나가면서 내가 입력한 시간도 삭제했어요';
+          if(room.confirmed){
+            const rest=people.filter(x=>!isMeIn(ids,x));
+            const c=room.confirmed;
+            const w=computeTop3(room,rest).all.find(x=>x.date===c.date&&x.start===c.start);
+            let broken=!rest.length||!w||!w.eligible;
+            if(!broken && c.attendees){
+              // 내가 참석자 명단에 있었다면 명단에서만 빼요
+              const left=c.attendees.filter(a=>!isMeIn(ids,a));
+              if(left.length!==c.attendees.length){ room.confirmed=Object.assign({},c,{attendees:left}); await Store.setRoom(code,room); }
+            }
+            if(broken){
+              room.confirmed=null; await Store.setRoom(code,room);
+              msg='내가 빠져서 확정 조건이 깨졌어요. 이 일정은 진행 중인 조율로 돌아갔어요';
+            }
+          }
+        }
+      }
+    }catch(err){
+      console.error('나가기 처리 중 오류',err);
+      closeSheet();
+      toast('나가지 못했어요. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    wipeLocalForRoom(code);
     closeSheet();
     await loadHomeMeetings();
     if(App.screen==='home')render();
-    toast('목록에서 나갔어요');
+    toast(msg);
   },
   mainTab:(el,v)=>{App.mainTab=v;App.calSelectedDate=null;if(v==='profile')initProfileDraft();render();},
   calNavMain:(el,v)=>{
