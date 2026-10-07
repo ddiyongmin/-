@@ -2188,11 +2188,14 @@ const globalActions={
         await loadHomeMeetings();render();
         return;
       }
+      safeReplaceHash(location.pathname+location.search); // 주소창의 #room=… 도 비워요
       clearMyProfile();
       LS.set('cimo:favorites',[]);LS.set('cimo:recents',[]);
-      PD=null;profileEditMode=false;
+      App.code=null;App.room=null;App.people=[];App.me=null;
+      App.mainTab='profile';
+      PD=null;profileEditMode=true;initProfileDraft(); // 삭제 뒤에는 바로 새 정보를 입력하는 화면으로 가요
       App.homeMeetings={loading:false,upcoming:[],ongoing:[],past:[]};
-      render();
+      await goHomeScreen();
       toast('내 정보와 모든 일정을 삭제했어요');
     }catch(err){
       console.error('내 정보 삭제 중 오류',err);
@@ -2698,6 +2701,8 @@ async function init(){
        한 번이라도 더 끊기면 그만큼 안 들어오고 이탈할 수 있어서, 여기는 0초가 맞아요. */
     $('#splash').style.display='none';
     await openRoom(m[1]);
+    /* 삭제됐거나 없는 방이면(프로필·방 삭제 뒤 새로고침 등) 오류 화면에 머물지 말고 주소를 비우고 홈으로 가요 */
+    if(App.screen!=='room'){ safeReplaceHash(location.pathname+location.search); await goHomeScreen(); }
     return;
   }
   const skip=reduceMotion();
